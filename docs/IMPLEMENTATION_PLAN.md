@@ -185,37 +185,41 @@ development workflow.
 
 #### Repository and tooling
 
--   [ ] Create the Git repository.
--   [ ] Add Flutter project and platform folders.
--   [ ] Configure `.gitignore`.
--   [ ] Add a `README.md` with prerequisites and setup instructions.
--   [ ] Add `CLAUDE.md` with project-specific coding rules.
--   [ ] Configure Dart formatting and lint rules.
--   [ ] Configure CI or a repeatable local validation script for
-    formatting, analysis, and tests.
--   [ ] Record Flutter and Dart SDK versions used by the project.
--   [ ] Pin package versions and commit the lockfile.
+-   [x] Create the Git repository.
+-   [x] Add Flutter project and platform folders.
+-   [x] Configure `.gitignore`.
+-   [x] Add a `README.md` with prerequisites and setup instructions.
+-   [x] Add `CLAUDE.md` with project-specific coding rules.
+-   [x] Configure Dart formatting and lint rules.
+-   [x] Configure CI or a repeatable local validation script for
+    formatting, analysis, and tests. (`tool/check.sh`; no CI yet.)
+-   [x] Record Flutter and Dart SDK versions used by the project.
+-   [x] Pin package versions and commit the lockfile.
 
 #### Application structure
 
--   [ ] Create the feature-oriented folder structure from
-    `TECHNICAL_ARCHITECTURE.md`.
--   [ ] Configure Riverpod providers and dependency wiring.
--   [ ] Configure `go_router`.
--   [ ] Create app bootstrap and error handling.
--   [ ] Create the application theme and typography foundations.
--   [ ] Add app-level loading, empty, and error state patterns.
--   [ ] Add logging that avoids book contents, notes, selected text, and
+-   [x] Create the feature-oriented folder structure from
+    `TECHNICAL_ARCHITECTURE.md`. (Folders are added as layers gain code;
+    `domain/` and `data/` arrive with Milestone 2.)
+-   [x] Configure Riverpod providers and dependency wiring.
+-   [x] Configure `go_router`.
+-   [x] Create app bootstrap and error handling.
+-   [x] Create the application theme and typography foundations.
+-   [x] Add app-level loading, empty, and error state patterns.
+-   [x] Add logging that avoids book contents, notes, selected text, and
     private file paths.
 
 #### Platform build
 
--   [ ] Confirm Android debug build.
--   [ ] Confirm iOS simulator build.
--   [ ] Add app identifiers and display name.
--   [ ] Configure required permissions and document-picker integration
-    only as needed.
+-   [x] Confirm Android debug build.
+-   [ ] Confirm iOS simulator build. **Deferred:** iOS work is on hold
+    by user decision (7 Nov 2026).
+-   [x] Add app identifiers and display name.
+-   [x] Configure required permissions and document-picker integration
+    only as needed. (None needed yet; the release manifest requests no
+    permissions. The document picker arrives with import.)
 -   [ ] Confirm both targets continue to build after dependency changes.
+    (Android only while iOS is deferred.)
 
 ### Deliverables
 

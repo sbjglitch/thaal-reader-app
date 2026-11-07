@@ -4,7 +4,7 @@ An offline-first EPUB and PDF reader for Android and iOS, built with Flutter.
 
 The app is designed for a focused personal reading experience: import publications into a local library, read without an internet connection, save reading progress, organise books, create bookmarks and EPUB annotations, and back up or restore the library manually.
 
-> **Project status:** In development. Start with the reader-engine technical spike before implementing the full application.
+> **Project status:** Milestone 0 (reader-engine spike) validated on Android; Milestone 1 (project foundation) in place. iOS work is on hold. See the repository root `README.md` for setup and the pinned toolchain.
 
 ## Product goals
 
@@ -81,15 +81,13 @@ Resolve the issues reported by `flutter doctor` for the platforms you intend to 
 Clone the repository, then run:
 
 ```bash
-git clone <repository-url>
-cd <repository-directory>
+git clone https://github.com/sbjglitch/thaal-reader-app.git
+cd thaal-reader-app
 
 flutter pub get
 ```
 
-The repository URL and directory name are placeholders; replace them with the actual values.
-
-If platform folders have not yet been generated, create them only after confirming the project's intended organisation and bundle identifiers. Do not overwrite existing platform configuration.
+The application ID and iOS bundle identifier are `com.sbjglitch.thaal`. Do not overwrite existing platform configuration.
 
 ### Run on Android
 
