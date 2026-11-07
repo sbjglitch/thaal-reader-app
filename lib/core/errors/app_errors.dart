@@ -1,0 +1,46 @@
+/// Typed application errors (TECHNICAL_ARCHITECTURE.md §11).
+///
+/// Messages are for diagnostics only. They must not contain file paths,
+/// publication text or notes; UI code maps the error kind to user wording.
+sealed class AppError implements Exception {
+  const AppError(this.message);
+
+  final String message;
+
+  @override
+  String toString() => '$runtimeType: $message';
+}
+
+enum DatabaseErrorKind {
+  /// The referenced record does not exist.
+  notFound,
+
+  /// A foreign-key, uniqueness or check constraint rejected the change.
+  constraintViolation,
+
+  /// Any other database failure.
+  failure,
+}
+
+final class DatabaseError extends AppError {
+  const DatabaseError(this.kind, super.message);
+
+  final DatabaseErrorKind kind;
+}
+
+enum StorageErrorKind {
+  /// A managed file or directory does not exist.
+  missingFile,
+
+  /// A path failed validation or escaped the library root.
+  unsafePath,
+
+  /// Reading, writing, moving or deleting failed.
+  ioFailure,
+}
+
+final class StorageError extends AppError {
+  const StorageError(this.kind, super.message);
+
+  final StorageErrorKind kind;
+}

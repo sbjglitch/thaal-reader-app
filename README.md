@@ -4,9 +4,10 @@ An offline-first EPUB and PDF reader for Android and iOS, built with Flutter.
 No accounts, no backend, no network: publications and reading data stay on
 the device.
 
-> **Status:** Milestone 1 (project foundation). The app shell, theme and
-> navigation are in place. Library, reader and backup features are not built
-> yet. Android is the first target; **iOS work is on hold**.
+> **Status:** Milestone 2 (database and storage). The app shell, local
+> database, repositories and app-private file storage are in place; import,
+> reader and backup features are not built yet. Android is the first target;
+> **iOS work is on hold**.
 
 Product scope, architecture and milestones live in [`docs/`](docs/README.md).
 Rules for AI-assisted development are in [`CLAUDE.md`](CLAUDE.md).
@@ -41,6 +42,29 @@ flutter pub get
 ```
 
 Application ID / bundle ID: `com.sbjglitch.thaal`. Display name: Thaal.
+
+### Generated code
+
+Drift generates `lib/data/database/app_database.g.dart`, which is committed.
+Regenerate it after changing tables or the database class:
+
+```bash
+dart run build_runner build
+```
+
+Before raising the database schema version, export the new schema snapshot
+(see `docs/DATABASE_SCHEMA.md` §10):
+
+```bash
+dart run drift_dev schema dump lib/data/database/app_database.dart drift_schemas/
+```
+
+### SQLite at build time
+
+`package:sqlite3` bundles its own SQLite. During a build it downloads the
+prebuilt library from the package's GitHub release and verifies it against
+SHA-256 hashes pinned in the package. This happens only on the build
+machine; the app makes no network calls.
 
 ### Gradle wrapper download times out
 
@@ -77,16 +101,27 @@ lib/
 ├── app/                   # Bootstrap, root widget, router, shell, providers
 │   └── theme/             # Design tokens and ThemeData (UI/UX spec §3–5, §9)
 ├── core/
+│   ├── errors/            # Typed AppError hierarchy
 │   ├── logging/           # Privacy-safe local logger
+│   ├── utils/             # UUID generation
 │   └── widgets/           # Shared empty / error / loading states
+├── domain/
+│   ├── entities/          # Books, reading data, ManagedPath, locator envelope
+│   └── repositories/      # Repository contracts
+├── data/
+│   ├── database/          # Drift tables, converters, AppDatabase (+ .g.dart)
+│   └── repositories/      # Drift-backed repository implementations
+├── services/storage/      # App-private library files and staging
 └── features/<feature>/presentation/
 test/                      # Mirrors lib/; shared helpers in test/support/
+drift_schemas/             # Exported database schema per version
 spike/reader_engine_spike/ # Milestone 0 throwaway spike (not part of the app)
 docs/                      # Specifications
 ```
 
-`domain/`, `data/` and `services/` are added with Milestone 2, when they first
-contain code.
+At startup the app creates `<app support>/library/{books,staging}` and
+`<app support>/thaal.sqlite`, and removes staging leftovers older than an
+hour.
 
 ## License
 

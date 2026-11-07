@@ -246,39 +246,40 @@ file management.
 
 #### Drift database
 
--   [ ] Add Drift and the required SQLite runtime.
--   [ ] Configure database creation for Android and iOS.
--   [ ] Implement `books`.
--   [ ] Implement `reading_progress`.
--   [ ] Implement `bookmarks`.
--   [ ] Implement `highlights`.
--   [ ] Implement `collections`.
--   [ ] Implement `collection_books`.
--   [ ] Add foreign keys, checks, unique constraints, and indexes.
--   [ ] Add typed enum and JSON converters.
--   [ ] Set the initial schema version.
--   [ ] Add explicit migration strategy.
--   [ ] Add database tests using an in-memory or temporary database.
+-   [x] Add Drift and the required SQLite runtime.
+-   [x] Configure database creation for Android and iOS. (Android
+    validated on a physical phone; iOS deferred.)
+-   [x] Implement `books`.
+-   [x] Implement `reading_progress`.
+-   [x] Implement `bookmarks`.
+-   [x] Implement `highlights`.
+-   [x] Implement `collections`.
+-   [x] Implement `collection_books`.
+-   [x] Add foreign keys, checks, unique constraints, and indexes.
+-   [x] Add typed enum and JSON converters.
+-   [x] Set the initial schema version.
+-   [x] Add explicit migration strategy.
+-   [x] Add database tests using an in-memory or temporary database.
 
 #### Storage service
 
--   [ ] Resolve the app-private support/document directory.
--   [ ] Create `library/books`, `library/staging`, and temporary work
-    directories.
--   [ ] Implement safe relative-path generation and validation.
--   [ ] Implement file existence and file-size checks.
--   [ ] Implement SHA-256 hashing.
--   [ ] Implement safe copy, move, and cleanup helpers.
--   [ ] Implement startup reconciliation for abandoned staging files.
--   [ ] Ensure file operations do not block the UI isolate.
+-   [x] Resolve the app-private support/document directory.
+-   [x] Create `library/books`, `library/staging`, and temporary work
+    directories. (Each operation gets its own `staging/<operation-id>/`.)
+-   [x] Implement safe relative-path generation and validation.
+-   [x] Implement file existence and file-size checks.
+-   [x] Implement SHA-256 hashing.
+-   [x] Implement safe copy, move, and cleanup helpers.
+-   [x] Implement startup reconciliation for abandoned staging files.
+-   [x] Ensure file operations do not block the UI isolate.
 
 #### Domain and repositories
 
--   [ ] Define domain entities independent of Drift.
--   [ ] Define repository interfaces.
--   [ ] Implement Drift-backed repositories.
--   [ ] Map Drift rows to domain models.
--   [ ] Expose observable library queries through streams where
+-   [x] Define domain entities independent of Drift.
+-   [x] Define repository interfaces.
+-   [x] Implement Drift-backed repositories.
+-   [x] Map Drift rows to domain models.
+-   [x] Expose observable library queries through streams where
     appropriate.
 
 ### Deliverables

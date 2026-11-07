@@ -637,6 +637,19 @@ MigrationStrategy get migration => MigrationStrategy(
 Do not add empty migration branches for future versions. Add a migration
 only when the schema actually changes.
 
+### Schema snapshots
+
+Each released schema version is exported to `drift_schemas/` (for example
+`drift_schema_v1.json`). Before raising `schemaVersion`, keep the previous
+snapshot and export the new one:
+
+``` bash
+dart run drift_dev schema dump lib/data/database/app_database.dart drift_schemas/
+```
+
+Migration tests for version *n* start from the snapshot of each earlier
+version. Version 1 has no earlier version, so no migration test exists yet.
+
 ## 11. Backup and restore mapping
 
 The backup format is specified separately in `BACKUP_FORMAT.md`. The
