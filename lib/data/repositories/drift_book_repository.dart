@@ -29,6 +29,15 @@ class DriftBookRepository implements BookRepository {
   });
 
   @override
+  Future<List<Book>> findBooksByChecksum(String checksum) =>
+      guardDatabase('findBooksByChecksum', () async {
+        final rows = await (_db.select(
+          _db.books,
+        )..where((t) => t.fileChecksum.equals(checksum))).get();
+        return rows.map(bookFromRow).toList();
+      });
+
+  @override
   Future<void> addBook(Book book) => guardDatabase('addBook', () async {
     await _db
         .into(_db.books)
@@ -100,6 +109,33 @@ class DriftBookRepository implements BookRepository {
 
   /// Idempotent: removing a book that no longer exists succeeds, so cleanup
   /// and recovery workflows can safely retry.
+  @override
+  Future<void> recordOpened(String bookId, DateTime at) => guardDatabase(
+    'recordOpened',
+    () {
+      return _db.transaction(() async {
+        final count =
+            await (_db.update(
+              _db.books,
+            )..where((t) => t.id.equals(bookId))).write(
+              BooksCompanion(
+                lastOpenedAt: Value(toEpochMillis(at)),
+                updatedAt: Value(toEpochMillis(at)),
+              ),
+            );
+        requireUpdated(count, 'recordOpened');
+        await (_db.update(_db.books)..where(
+              (t) =>
+                  t.id.equals(bookId) &
+                  t.readingStatus.equalsValue(ReadingStatus.unread),
+            ))
+            .write(
+              const BooksCompanion(readingStatus: Value(ReadingStatus.reading)),
+            );
+      });
+    },
+  );
+
   @override
   Future<void> removeBook(String bookId) => guardDatabase('removeBook', () {
     return (_db.delete(_db.books)..where((t) => t.id.equals(bookId))).go();

@@ -1,12 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:thaal/app/app.dart';
+import 'package:thaal/app/providers.dart';
 import 'package:thaal/app/router.dart';
+import 'package:thaal/features/library/application/library_items.dart';
 
 Future<void> _pumpApp(WidgetTester tester) async {
-  await tester.pumpWidget(const ProviderScope(child: ThaalApp()));
+  SharedPreferences.setMockInitialValues({});
+  final preferences = await SharedPreferences.getInstance();
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        libraryItemsProvider.overrideWith((ref) => Stream.value(const [])),
+        sharedPreferencesProvider.overrideWithValue(preferences),
+      ],
+      child: const ThaalApp(),
+    ),
+  );
   await tester.pumpAndSettle();
 }
 
@@ -40,7 +52,7 @@ void main() {
   testWidgets('placeholder tabs offer no actions', (tester) async {
     await _pumpApp(tester);
 
-    for (final label in ['Library', 'Collections', 'Bookmarks', 'Settings']) {
+    for (final label in ['Collections', 'Bookmarks', 'Settings']) {
       await tester.tap(_tab(label));
       await tester.pumpAndSettle();
       expect(find.byType(ButtonStyleButton), findsNothing, reason: label);

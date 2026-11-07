@@ -98,10 +98,12 @@ class LibraryStorage {
     final target = file(staged);
     try {
       await source.copy(target.path);
-    } on FileSystemException {
+    } on FileSystemException catch (error) {
       await _deleteIfExists(target);
-      throw const StorageError(
-        StorageErrorKind.ioFailure,
+      throw StorageError(
+        _isOutOfSpace(error)
+            ? StorageErrorKind.insufficientSpace
+            : StorageErrorKind.ioFailure,
         'copy into staging failed',
       );
     }
@@ -141,6 +143,43 @@ class LibraryStorage {
       if (await directory.exists()) await directory.delete(recursive: true);
     });
   }
+
+  /// Moves `books/<bookId>/` into a new staging area so a removal can be
+  /// undone if the database change fails (DATABASE_SCHEMA.md §7.1). Returns
+  /// the staging area, or null when the book has no files to move.
+  Future<ManagedPath?> moveBookToStaging(String bookId) async {
+    final directory = _directory(bookDirectory(bookId));
+    if (!await directory.exists()) return null;
+    final area = await createStagingArea();
+    try {
+      await _io('move book to staging', () {
+        return directory.rename(_absolute(_stagedBook(area)));
+      });
+    } on StorageError {
+      await discardStagingArea(area);
+      rethrow;
+    }
+    return area;
+  }
+
+  /// Undoes [moveBookToStaging]. Refuses to overwrite files that have since
+  /// appeared at the book's location.
+  Future<void> restoreBookFromStaging(ManagedPath area, String bookId) async {
+    _requireWithin(area, stagingDir);
+    final destination = _directory(bookDirectory(bookId));
+    if (await destination.exists()) {
+      throw const StorageError(
+        StorageErrorKind.ioFailure,
+        'restore target already exists',
+      );
+    }
+    await _io('restore book from staging', () {
+      return _directory(_stagedBook(area)).rename(destination.path);
+    });
+  }
+
+  static ManagedPath _stagedBook(ManagedPath area) =>
+      ManagedPath.join([...area.segments, 'book']);
 
   /// Removes all files of [bookId]. Idempotent. Only ever touches
   /// `books/<bookId>/`.
@@ -196,6 +235,12 @@ class LibraryStorage {
       );
     }
   }
+
+  // ENOSPC on Linux/Android and Darwin.
+  static const int _errnoNoSpace = 28;
+
+  static bool _isOutOfSpace(FileSystemException error) =>
+      error.osError?.errorCode == _errnoNoSpace;
 
   static Future<void> _deleteIfExists(File target) async {
     try {

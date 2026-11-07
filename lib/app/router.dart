@@ -5,7 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../core/widgets/app_error_state.dart';
 import '../features/bookmarks/presentation/bookmarks_screen.dart';
 import '../features/collections/presentation/collections_screen.dart';
+import '../features/library/presentation/book_details_screen.dart';
 import '../features/library/presentation/library_screen.dart';
+import '../features/reader/presentation/reader_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import 'app_shell.dart';
 
@@ -17,6 +19,18 @@ abstract final class AppRoutes {
   static const bookmarks = (name: 'bookmarks', path: '/bookmarks');
   static const settings = (name: 'settings', path: '/settings');
 
+  /// Book details, nested under the library so back returns to it.
+  static const bookDetails = (name: 'bookDetails', path: 'books/:bookId');
+
+  /// Full-screen reader, outside the bottom-navigation shell (UI/UX §6.1).
+  static const reader = (name: 'reader', path: '/reader/:bookId');
+
+  static String readerLocation(String bookId) =>
+      '/reader/${Uri.encodeComponent(bookId)}';
+
+  static String bookDetailsLocation(String bookId) =>
+      '${library.path}/books/${Uri.encodeComponent(bookId)}';
+
   static const initialLocation = '/library';
 }
 
@@ -24,12 +38,27 @@ final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     initialLocation: AppRoutes.initialLocation,
     routes: [
-      // The reader will be a full-screen route outside this shell: it is
-      // opened from a book, not a bottom-navigation destination (UI/UX §6.1).
+      GoRoute(
+        name: AppRoutes.reader.name,
+        path: AppRoutes.reader.path,
+        builder: (context, state) =>
+            ReaderScreen(bookId: state.pathParameters['bookId']!),
+      ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(navigationShell: shell),
         branches: [
-          _branch(AppRoutes.library, (_) => const LibraryScreen()),
+          _branch(
+            AppRoutes.library,
+            (_) => const LibraryScreen(),
+            routes: [
+              GoRoute(
+                name: AppRoutes.bookDetails.name,
+                path: AppRoutes.bookDetails.path,
+                builder: (context, state) =>
+                    BookDetailsScreen(bookId: state.pathParameters['bookId']!),
+              ),
+            ],
+          ),
           _branch(AppRoutes.collections, (_) => const CollectionsScreen()),
           _branch(AppRoutes.bookmarks, (_) => const BookmarksScreen()),
           _branch(AppRoutes.settings, (_) => const SettingsScreen()),
@@ -44,14 +73,16 @@ final routerProvider = Provider<GoRouter>((ref) {
 
 StatefulShellBranch _branch(
   ({String name, String path}) route,
-  WidgetBuilder screen,
-) {
+  WidgetBuilder screen, {
+  List<RouteBase> routes = const [],
+}) {
   return StatefulShellBranch(
     routes: [
       GoRoute(
         name: route.name,
         path: route.path,
         builder: (context, state) => screen(context),
+        routes: routes,
       ),
     ],
   );

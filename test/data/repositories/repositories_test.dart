@@ -66,6 +66,26 @@ void main() {
   );
 
   group('BookRepository', () {
+    test('recordOpened sets lastOpenedAt and starts an unread book', () async {
+      await books.addBook(sampleBook());
+      await books.recordOpened('book-1', later);
+
+      final opened = (await books.getBook('book-1'))!;
+      expect(opened.lastOpenedAt, later);
+      expect(opened.readingStatus, ReadingStatus.reading);
+
+      await books.updateReadingStatus('book-1', ReadingStatus.finished);
+      await books.recordOpened('book-1', later);
+      expect(
+        (await books.getBook('book-1'))!.readingStatus,
+        ReadingStatus.finished,
+      );
+      await expectLater(
+        books.recordOpened('missing', later),
+        throwsA(isA<DatabaseError>()),
+      );
+    });
+
     test('adds and reads back every field', () async {
       final book = sampleBook();
       await books.addBook(book);
@@ -157,6 +177,21 @@ void main() {
 
   group('ReadingProgressRepository', () {
     setUp(() => books.addBook(sampleBook()));
+
+    test('watchProgressions lists books that have a progression', () async {
+      await books.addBook(sampleBook(id: 'book-2'));
+      await progress.saveProgress(
+        ReadingProgress(bookId: 'book-1', progression: 0.4, updatedAt: later),
+      );
+      await progress.saveProgress(
+        ReadingProgress(
+          bookId: 'book-2',
+          locator: sampleLocator(),
+          updatedAt: later,
+        ),
+      );
+      expect(await progress.watchProgressions().first, {'book-1': 0.4});
+    });
 
     test('saves, replaces and clears the single progress row', () async {
       final first = ReadingProgress(

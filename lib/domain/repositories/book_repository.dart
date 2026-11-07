@@ -9,6 +9,9 @@ abstract interface class BookRepository {
 
   Future<Book?> getBook(String bookId);
 
+  /// Books whose file has [checksum]; used to warn about duplicate imports.
+  Future<List<Book>> findBooksByChecksum(String checksum);
+
   /// Throws [DatabaseError] with `constraintViolation` if the ID or file path
   /// is already in use.
   Future<void> addBook(Book book);
@@ -18,6 +21,10 @@ abstract interface class BookRepository {
   Future<void> updateBookMetadata(Book book);
 
   Future<void> updateReadingStatus(String bookId, ReadingStatus status);
+
+  /// Sets `lastOpenedAt` to [at] and moves an unread book to
+  /// [ReadingStatus.reading]. Finished books stay finished.
+  Future<void> recordOpened(String bookId, DateTime at);
 
   /// Deletes the record; progress, bookmarks, highlights and collection links
   /// are removed by cascade.

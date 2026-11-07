@@ -35,6 +35,9 @@ enum StorageErrorKind {
   /// A path failed validation or escaped the library root.
   unsafePath,
 
+  /// The device has no space left for the write.
+  insufficientSpace,
+
   /// Reading, writing, moving or deleting failed.
   ioFailure,
 }
@@ -43,4 +46,16 @@ final class StorageError extends AppError {
   const StorageError(this.kind, super.message);
 
   final StorageErrorKind kind;
+}
+
+enum PublicationErrorKind {
+  /// The reader engine could not parse the file as a publication.
+  unreadable,
+}
+
+/// The reader engine could not open or inspect a publication.
+final class PublicationError extends AppError {
+  const PublicationError(this.kind, super.message);
+
+  final PublicationErrorKind kind;
 }

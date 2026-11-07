@@ -55,4 +55,22 @@ class DriftReadingProgressRepository implements ReadingProgressRepository {
           _db.readingProgressEntries,
         )..where((t) => t.bookId.equals(bookId))).go();
       });
+
+  @override
+  Stream<Map<String, double>> watchProgressions() {
+    final query = _db.selectOnly(_db.readingProgressEntries)
+      ..addColumns([
+        _db.readingProgressEntries.bookId,
+        _db.readingProgressEntries.progression,
+      ])
+      ..where(_db.readingProgressEntries.progression.isNotNull());
+    return query.watch().map(
+      (rows) => {
+        for (final row in rows)
+          row.read(_db.readingProgressEntries.bookId)!: row.read(
+            _db.readingProgressEntries.progression,
+          )!,
+      },
+    );
+  }
 }

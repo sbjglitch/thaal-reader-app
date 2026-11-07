@@ -4,9 +4,10 @@ An offline-first EPUB and PDF reader for Android and iOS, built with Flutter.
 No accounts, no backend, no network: publications and reading data stay on
 the device.
 
-> **Status:** Milestone 2 (database and storage). The app shell, local
-> database, repositories and app-private file storage are in place; import,
-> reader and backup features are not built yet. Android is the first target;
+> **Status:** Milestone 4 (reader). Import, the library, and reading EPUB
+> and PDF books with a table of contents, saved reading position and reading
+> settings work. Bookmarks, highlights (Milestone 5) and backup are not
+> built yet. Android is the first target;
 > **iOS work is on hold**.
 
 Product scope, architecture and milestones live in [`docs/`](docs/README.md).
@@ -84,6 +85,10 @@ flutter devices
 flutter run -d <device-id>
 ```
 
+Importing uses the system document picker (`file_picker`), so the app needs
+no storage permission. The picker's temporary copies are deleted after each
+import; the user's original files are never modified.
+
 ## Checks
 
 `tool/check.sh` runs formatting, static analysis and tests. Add `--build` to
@@ -107,12 +112,19 @@ lib/
 │   └── widgets/           # Shared empty / error / loading states
 ├── domain/
 │   ├── entities/          # Books, reading data, ManagedPath, locator envelope
-│   └── repositories/      # Repository contracts
+│   ├── repositories/      # Repository contracts
+│   └── services/          # Service contracts (publication inspector)
 ├── data/
 │   ├── database/          # Drift tables, converters, AppDatabase (+ .g.dart)
-│   └── repositories/      # Drift-backed repository implementations
-├── services/storage/      # App-private library files and staging
-└── features/<feature>/presentation/
+│   ├── repositories/      # Drift-backed repository implementations
+│   └── preferences/       # SharedPreferences-backed settings
+├── services/
+│   ├── storage/           # App-private library files and staging
+│   ├── library/           # Book removal workflow
+│   ├── import/            # Document picker and import pipeline
+│   └── reader/            # Reader contract + flutter_readium adapters
+│                          # (the only code that imports the plugin)
+└── features/<feature>/{application,presentation}/
 test/                      # Mirrors lib/; shared helpers in test/support/
 drift_schemas/             # Exported database schema per version
 spike/reader_engine_spike/ # Milestone 0 throwaway spike (not part of the app)

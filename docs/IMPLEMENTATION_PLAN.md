@@ -305,35 +305,43 @@ library.
 
 ### 3.1 Import pipeline
 
--   [ ] Integrate a system document picker for EPUB and PDF.
--   [ ] Support selecting one or multiple files if reliable on both
-    platforms.
--   [ ] Validate file extension and content where possible.
--   [ ] Handle unsupported formats and malformed files.
--   [ ] Copy selected files into app-private staging storage.
--   [ ] Calculate file size and SHA-256 checksum.
--   [ ] Extract metadata using the reader integration where supported.
--   [ ] Extract or generate a cover where supported.
--   [ ] Create a stable UUID for each imported book.
--   [ ] Move validated files into final storage.
--   [ ] Insert the book record only after the import is ready.
--   [ ] Clean up partial files and records after failure.
--   [ ] Detect same-checksum imports and show a duplicate warning.
+-   [x] Integrate a system document picker for EPUB and PDF.
+-   [x] Support selecting one or multiple files if reliable on both
+    platforms. (Android; iOS deferred.)
+-   [x] Validate file extension and content where possible.
+-   [x] Handle unsupported formats and malformed files.
+-   [x] Copy selected files into app-private staging storage.
+-   [x] Calculate file size and SHA-256 checksum.
+-   [x] Extract metadata using the reader integration where supported.
+-   [x] Extract or generate a cover where supported. (EPUB covers via
+    `flutter_readium`; this briefly opens the publication, so Milestone 4
+    must not run import inspection while a reader session is open.)
+-   [x] Create a stable UUID for each imported book.
+-   [x] Move validated files into final storage.
+-   [x] Insert the book record only after the import is ready.
+-   [x] Clean up partial files and records after failure.
+-   [x] Detect same-checksum imports and show a duplicate warning.
 
 ### 3.2 Library UI
 
--   [ ] Build the library home screen.
--   [ ] Build book grid and list presentation.
--   [ ] Display title, author, format, cover, and reading status.
--   [ ] Implement recently added sorting.
--   [ ] Implement recently opened sorting.
--   [ ] Implement title and author search.
--   [ ] Implement format and reading-status filters.
--   [ ] Add empty library state and import entry point.
--   [ ] Add loading, error, and missing-file states.
--   [ ] Build book details screen.
--   [ ] Add remove/delete confirmation and clear file-deletion
-    semantics.
+-   [x] Build the library home screen.
+-   [x] Build book grid and list presentation. (Choice persists in
+    SharedPreferences.)
+-   [x] Display title, author, format, cover, and reading status.
+-   [x] Implement recently added sorting.
+-   [x] Implement recently opened sorting. (Never-opened books sort
+    last; `last_opened_at` is set once the reader exists in Milestone 4.)
+-   [x] Implement title and author search.
+-   [x] Implement format and reading-status filters.
+-   [x] Add empty library state and import entry point.
+-   [x] Add loading, error, and missing-file states.
+-   [x] Build book details screen. (Tapping a book opens details until
+    the reader exists.)
+-   [x] Add remove/delete confirmation and clear file-deletion
+    semantics. (One action, "Remove from library": it deletes the
+    record, its reading data and the app's private copy; the user's
+    original file is never touched. Two actions would behave the same,
+    per DATABASE_SCHEMA.md §7.2.)
 
 ### Deliverables
 
@@ -356,54 +364,75 @@ library.
 
 **Objective:** Deliver the core reading experience for EPUB and PDF.
 
+Carried over from Milestone 3 and done in 4a: tapping a library book opens
+the reader, `last_opened_at` is set on open, the "reading progress" library
+sort exists, and import cover extraction is skipped while a reader session
+is open.
+
+Split: **4a** (done) reader contract, adapter, session controller, EPUB/PDF
+reading, TOC, progress persistence. **4b** (done) reading preferences:
+EPUB theme (system/light/dark from the colour tokens), text size (80–200%)
+and pages/scroll; PDF pages/scroll and fit width/whole page; reset to
+defaults. Preferences are global (SharedPreferences) with no per-book
+overrides. A change is applied to the engine first and saved only if the
+engine accepts it; after an EPUB reflow the reader returns to the last
+known position (spike finding 10). Text selection
+uses the engine's native selection; it is ticked after an on-device check.
+
+Reading status: an unread book becomes "reading" when it is first opened
+and "finished" when the engine reports the end of the publication.
+
 ### 4.1 Reader abstraction
 
--   [ ] Define an app-owned `PublicationReaderService` interface.
--   [ ] Define app-owned reader event, error, position, and preference
-    models.
--   [ ] Implement a `flutter_readium` adapter.
--   [ ] Keep plugin-specific models inside the adapter.
--   [ ] Define reader open/close lifecycle.
--   [ ] Define event subscription and cleanup behavior.
--   [ ] Handle unsupported features and plugin errors without crashing
+-   [x] Define an app-owned `PublicationReaderService` interface.
+-   [x] Define app-owned reader event, error, position, and preference
+    models. (`lib/services/reader/publication_reader.dart`; the
+    interface is named `PublicationReader`. Preference models arrive in
+    4b with the settings.)
+-   [x] Implement a `flutter_readium` adapter.
+-   [x] Keep plugin-specific models inside the adapter.
+-   [x] Define reader open/close lifecycle.
+-   [x] Define event subscription and cleanup behavior.
+-   [x] Handle unsupported features and plugin errors without crashing
     the app.
 
 ### 4.2 EPUB reader
 
--   [ ] Open a locally stored EPUB.
--   [ ] Render publication content.
--   [ ] Display and navigate table of contents.
--   [ ] Support next/previous navigation.
--   [ ] Support pagination/scroll mode where available.
--   [ ] Support font size and reading theme controls.
+-   [x] Open a locally stored EPUB.
+-   [x] Render publication content.
+-   [x] Display and navigate table of contents.
+-   [x] Support next/previous navigation.
+-   [x] Support pagination/scroll mode where available.
+-   [x] Support font size and reading theme controls.
 -   [ ] Support text selection.
--   [ ] Retrieve and serialize the reader locator.
--   [ ] Restore the last saved locator.
--   [ ] Handle malformed or unsupported EPUBs with a clear error state.
+-   [x] Retrieve and serialize the reader locator.
+-   [x] Restore the last saved locator.
+-   [x] Handle malformed or unsupported EPUBs with a clear error state.
 
 ### 4.3 PDF reader
 
--   [ ] Open a locally stored PDF.
--   [ ] Render PDF pages.
--   [ ] Support page navigation.
+-   [x] Open a locally stored PDF.
+-   [x] Render PDF pages.
+-   [x] Support page navigation.
 -   [ ] Display current page and total page count where available.
--   [ ] Save and restore the current PDF position.
+    (Current page shown; the 0.9.0 locator carries no total page count.)
+-   [x] Save and restore the current PDF position.
 -   [ ] Handle large files and memory pressure.
--   [ ] Handle corrupt or unsupported PDFs.
+-   [x] Handle corrupt or unsupported PDFs.
 
 ### 4.4 Progress persistence
 
--   [ ] Persist locator JSON through `ReadingProgressRepository`.
--   [ ] Store supplementary page number and progression where
+-   [x] Persist locator JSON through `ReadingProgressRepository`.
+-   [x] Store supplementary page number and progression where
     meaningful.
--   [ ] Debounce frequent position events.
--   [ ] Save after meaningful navigation.
--   [ ] Save after inactivity.
--   [ ] Save when app enters background.
--   [ ] Save when reader closes.
--   [ ] Restore only after publication navigator is ready.
+-   [x] Debounce frequent position events.
+-   [x] Save after meaningful navigation.
+-   [x] Save after inactivity.
+-   [x] Save when app enters background.
+-   [x] Save when reader closes.
+-   [x] Restore only after publication navigator is ready.
 -   [ ] Test recovery after process termination.
--   [ ] Update `last_opened_at` and reading status consistently.
+-   [x] Update `last_opened_at` and reading status consistently.
 
 ### Deliverables
 

@@ -3,13 +3,16 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_readium/flutter_readium.dart' show FlutterReadium;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/logging/app_logger.dart';
 import '../core/widgets/app_error_state.dart';
 import '../data/database/app_database.dart';
+import '../services/reader/readium_setup.dart';
 import '../services/storage/library_storage.dart';
 import 'app.dart';
 import 'providers.dart';
@@ -26,7 +29,9 @@ Future<void> bootstrap() async {
 
   final AppDatabase database;
   final LibraryStorage storage;
+  final SharedPreferences preferences;
   try {
+    await configureReadium(FlutterReadium());
     final supportDirectory = await getApplicationSupportDirectory();
     storage = await LibraryStorage.open(
       Directory(p.join(supportDirectory.path, 'library')),
@@ -46,6 +51,7 @@ Future<void> bootstrap() async {
     // Drift opens lazily; run a query now so creation and migrations happen
     // here, where a failure can be reported, rather than in the first screen.
     await database.customSelect('SELECT 1').get();
+    preferences = await SharedPreferences.getInstance();
   } catch (error, stackTrace) {
     logger.error('bootstrap.failed', error, stackTrace: stackTrace);
     runApp(const _StartupFailureApp());
@@ -58,6 +64,7 @@ Future<void> bootstrap() async {
         appLoggerProvider.overrideWithValue(logger),
         appDatabaseProvider.overrideWithValue(database),
         libraryStorageProvider.overrideWithValue(storage),
+        sharedPreferencesProvider.overrideWithValue(preferences),
       ],
       child: const ThaalApp(),
     ),

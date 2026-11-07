@@ -7,8 +7,7 @@ import 'package:drift/remote.dart';
 
 import '../../core/errors/app_errors.dart';
 
-/// Wall-clock source, injectable for tests.
-typedef Clock = DateTime Function();
+export '../../core/utils/clock.dart';
 
 /// UTC epoch milliseconds, the storage format for every timestamp
 /// (DATABASE_SCHEMA.md §4.2).

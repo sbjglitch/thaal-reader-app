@@ -456,6 +456,12 @@ metadata.
 Do not present two actions that behave identically under different
 names.
 
+**MVP decision:** the app owns only its private copy of each publication,
+so there is a single **Remove from library** action. It deletes the record,
+its dependent reading data and the app's copy, following §7.1 (files are
+moved to `staging/` first and moved back if the database delete fails). The
+user's original source document is never modified or deleted.
+
 ## 8. Drift implementation guidance
 
 ### 8.1 Suggested Drift table layout
