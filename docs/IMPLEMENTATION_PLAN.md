@@ -592,17 +592,58 @@ Implement according to `BACKUP_FORMAT.md`.
 
 ### 6.1 Export
 
--   [ ] Implement backup domain models independent of Drift.
--   [ ] Implement JSON serializers for each dataset.
--   [ ] Implement manifest generation.
--   [ ] Implement full backup export.
--   [ ] Implement library-only backup export.
--   [ ] Include publication files and covers for full backups.
--   [ ] Calculate SHA-256 and sizes for every declared entry.
--   [ ] Build ZIP archives in a temporary workspace.
--   [ ] Re-open and validate the completed archive.
--   [ ] Export through the platform save/share flow.
--   [ ] Clean up temporary files after success or cancellation.
+-   [x] Implement backup domain models independent of Drift.
+-   [x] Implement JSON serializers for each dataset.
+-   [x] Implement manifest generation.
+-   [x] Implement full backup export.
+-   [x] Implement library-only backup export.
+-   [x] Include publication files and covers for full backups.
+-   [x] Calculate SHA-256 and sizes for every declared entry.
+-   [x] Build ZIP archives in a temporary workspace.
+-   [x] Re-open and validate the completed archive.
+-   [x] Export through the platform save/share flow.
+-   [x] Clean up temporary files after success or cancellation.
+
+Implementation notes (Milestone 6a):
+
+-   Settings has a Data section with "Create full backup" and "Create
+    library-only backup" (Android only, while iOS is on hold). Each
+    explains what the backup includes and that it is not encrypted, and
+    offers "Include settings" (default on).
+-   The archive is built in a staging area: manifest first, then the
+    datasets, then each publication and its cover, stored without
+    compression (`archive` 4.6.0). Archive work and hashing run on a
+    background isolate.
+-   Publication files are archived straight from the library rather than
+    copied into the workspace first (BACKUP_FORMAT.md §7.1 step 3). Each is
+    hashed first and compared with the library's stored checksum; the
+    finished archive is then reopened and every entry rehashed, so a file
+    that changed during the export still fails the backup.
+-   A full backup stops if any book's file is missing or no longer matches
+    its stored checksum, and lists those books with an offer to create a
+    library-only backup instead. Partial full backups are not supported.
+-   Saving uses the system Save dialog (`ACTION_CREATE_DOCUMENT`) through a
+    small channel in `MainActivity`; the app gets access to the chosen
+    file only and needs no permission. A failed write removes the partial
+    file where the provider allows it.
+-   The archive verifier (`verifyBackupArchive`) is the same one restore
+    will use: limits, entry types, paths, duplicates, manifest structure,
+    and size and SHA-256 of every entry. Dataset contents are parsed in
+    Milestone 6b.
+
+Verified on the Android phone (8 Nov 2026): a full backup (2 books,
+9.5 MB, about 5 s) and a library-only backup (7.9 KB) saved to Downloads
+through the Save dialog with the `.readerbackup` name kept. Both pulled
+files passed `verifyBackupArchive`, with the expected entries, counts and
+allowlisted settings, and the staging area was empty afterwards.
+
+Known limitations:
+
+-   A backup that is being created cannot be cancelled except at the Save
+    dialog.
+-   If Android recreates the activity while the Save dialog is open, that
+    backup is abandoned; its workspace is removed by startup staging
+    cleanup.
 
 ### 6.2 Restore
 

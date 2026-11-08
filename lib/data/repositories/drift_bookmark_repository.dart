@@ -16,7 +16,7 @@ class DriftBookmarkRepository implements BookmarkRepository {
     final query = _db.select(_db.bookmarks)
       ..where((t) => t.bookId.equals(bookId))
       ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]);
-    return query.watch().map((rows) => rows.map(_fromRow).toList());
+    return query.watch().map((rows) => rows.map(bookmarkFromRow).toList());
   }
 
   @override
@@ -26,7 +26,7 @@ class DriftBookmarkRepository implements BookmarkRepository {
         (t) => OrderingTerm.desc(t.createdAt),
         (t) => OrderingTerm.asc(t.id),
       ]);
-    return query.watch().map((rows) => rows.map(_fromRow).toList());
+    return query.watch().map((rows) => rows.map(bookmarkFromRow).toList());
   }
 
   @override
@@ -68,13 +68,14 @@ class DriftBookmarkRepository implements BookmarkRepository {
           _db.bookmarks,
         )..where((t) => t.id.equals(bookmarkId))).go();
       });
-
-  static Bookmark _fromRow(BookmarkRow row) => Bookmark(
-    id: row.id,
-    bookId: row.bookId,
-    locator: SerializedLocator.stored(row.locatorJson),
-    label: row.label,
-    createdAt: fromEpochMillis(row.createdAt),
-    updatedAt: fromEpochMillis(row.updatedAt),
-  );
 }
+
+/// Maps a stored row to the domain entity. Visible for the data layer.
+Bookmark bookmarkFromRow(BookmarkRow row) => Bookmark(
+  id: row.id,
+  bookId: row.bookId,
+  locator: SerializedLocator.stored(row.locatorJson),
+  label: row.label,
+  createdAt: fromEpochMillis(row.createdAt),
+  updatedAt: fromEpochMillis(row.updatedAt),
+);

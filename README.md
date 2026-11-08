@@ -4,11 +4,11 @@ An offline-first EPUB and PDF reader for Android and iOS, built with Flutter.
 No accounts, no backend, no network: publications and reading data stay on
 the device.
 
-> **Status:** Milestone 5 (bookmarks, highlights). Import, the library,
+> **Status:** Milestone 6 (backup and restore). Import, the library,
 > reading EPUB and PDF books with a table of contents, saved reading
-> position, reading settings, bookmarks, and EPUB highlights and notes
-> work, as does the app theme setting. Backup is not built yet. Android is
-> the first target;
+> position, reading settings, bookmarks, EPUB highlights and notes, the
+> app theme setting, and creating full and library-only backups work.
+> Restoring a backup is not built yet. Android is the first target;
 > **iOS work is on hold**.
 
 Product scope, architecture and milestones live in [`docs/`](docs/README.md).
@@ -88,7 +88,8 @@ flutter run -d <device-id>
 
 Importing uses the system document picker (`file_picker`), so the app needs
 no storage permission. The picker's temporary copies are deleted after each
-import; the user's original files are never modified.
+import; the user's original files are never modified. Backups are saved
+through the system Save dialog, which needs no permission either.
 
 ## Checks
 
@@ -123,6 +124,7 @@ lib/
 │   ├── storage/           # App-private library files and staging
 │   ├── library/           # Book removal workflow
 │   ├── import/            # Document picker and import pipeline
+│   ├── backup/            # Backup format, archive writer/verifier, export
 │   └── reader/            # Reader contract + flutter_readium adapters
 │                          # (the only code that imports the plugin)
 └── features/<feature>/{application,presentation}/

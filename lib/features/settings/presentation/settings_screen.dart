@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
 import '../../../app/theme/app_color_tokens.dart';
 import '../../../app/theme/app_spacing_tokens.dart';
 import '../../../domain/entities/app_preferences.dart';
+import '../../backup/presentation/backup_section.dart';
 import '../application/app_theme_controller.dart';
 
 /// Settings tab (UI/UX §7.10). Only settings that work are shown.
@@ -13,6 +15,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(appThemeProvider);
+    final backupSupported = ref.watch(backupSaverProvider).isSupported;
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
@@ -36,6 +39,10 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ),
           ),
+          if (backupSupported) ...[
+            const _SectionHeader('Data'),
+            const BackupSection(),
+          ],
         ],
       ),
     );

@@ -59,3 +59,25 @@ final class PublicationError extends AppError {
 
   final PublicationErrorKind kind;
 }
+
+enum BackupErrorKind {
+  /// The file is not a readable backup archive, or breaks the format rules
+  /// (paths, duplicates, required fields, entry roles).
+  invalidArchive,
+
+  /// The archive declares a format version this app cannot read.
+  unsupportedVersion,
+
+  /// An entry's size or SHA-256 does not match the manifest.
+  checksumMismatch,
+
+  /// The archive exceeds a resource limit (BACKUP_FORMAT.md §9.2).
+  limitExceeded,
+}
+
+/// A backup archive failed validation.
+final class BackupError extends AppError {
+  const BackupError(this.kind, super.message);
+
+  final BackupErrorKind kind;
+}

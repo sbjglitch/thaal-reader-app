@@ -16,7 +16,7 @@ class DriftHighlightRepository implements HighlightRepository {
     final query = _db.select(_db.highlights)
       ..where((t) => t.bookId.equals(bookId))
       ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]);
-    return query.watch().map((rows) => rows.map(_fromRow).toList());
+    return query.watch().map((rows) => rows.map(highlightFromRow).toList());
   }
 
   @override
@@ -61,15 +61,16 @@ class DriftHighlightRepository implements HighlightRepository {
           _db.highlights,
         )..where((t) => t.id.equals(highlightId))).go();
       });
-
-  static Highlight _fromRow(HighlightRow row) => Highlight(
-    id: row.id,
-    bookId: row.bookId,
-    locator: SerializedLocator.stored(row.locatorJson),
-    selectedText: row.selectedText,
-    color: row.color,
-    note: row.note,
-    createdAt: fromEpochMillis(row.createdAt),
-    updatedAt: fromEpochMillis(row.updatedAt),
-  );
 }
+
+/// Maps a stored row to the domain entity. Visible for the data layer.
+Highlight highlightFromRow(HighlightRow row) => Highlight(
+  id: row.id,
+  bookId: row.bookId,
+  locator: SerializedLocator.stored(row.locatorJson),
+  selectedText: row.selectedText,
+  color: row.color,
+  note: row.note,
+  createdAt: fromEpochMillis(row.createdAt),
+  updatedAt: fromEpochMillis(row.updatedAt),
+);

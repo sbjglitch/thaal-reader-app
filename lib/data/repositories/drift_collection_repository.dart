@@ -18,7 +18,7 @@ class DriftCollectionRepository implements CollectionRepository {
         (t) => OrderingTerm.asc(t.name.collate(Collate.noCase)),
         (t) => OrderingTerm.asc(t.createdAt),
       ]);
-    return query.watch().map((rows) => rows.map(_fromRow).toList());
+    return query.watch().map((rows) => rows.map(collectionFromRow).toList());
   }
 
   @override
@@ -97,11 +97,12 @@ class DriftCollectionRepository implements CollectionRepository {
       ..orderBy([(t) => OrderingTerm.asc(t.addedAt)]);
     return query.watch().map((rows) => [for (final r in rows) r.bookId]);
   }
-
-  static Collection _fromRow(CollectionRow row) => Collection(
-    id: row.id,
-    name: row.name,
-    createdAt: fromEpochMillis(row.createdAt),
-    updatedAt: fromEpochMillis(row.updatedAt),
-  );
 }
+
+/// Maps a stored row to the domain entity. Visible for the data layer.
+Collection collectionFromRow(CollectionRow row) => Collection(
+  id: row.id,
+  name: row.name,
+  createdAt: fromEpochMillis(row.createdAt),
+  updatedAt: fromEpochMillis(row.updatedAt),
+);
