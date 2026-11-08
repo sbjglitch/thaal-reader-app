@@ -11,13 +11,16 @@ import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading_indicator.dart';
 import '../../../core/widgets/sheet_messenger.dart';
 import '../../../domain/entities/enums.dart';
+import '../../../domain/entities/reader_preferences.dart';
 import '../../../services/reader/publication_reader.dart';
 import '../../bookmarks/application/bookmarks.dart';
 import '../../bookmarks/presentation/bookmark_widgets.dart';
 import '../../highlights/application/highlights.dart';
 import '../../highlights/presentation/highlight_widgets.dart';
 import '../application/reader_controller.dart';
+import '../application/reader_preferences_controller.dart';
 import 'reader_settings_sheet.dart';
+import 'swipe_page_turner.dart';
 import 'toc_sheet.dart';
 
 /// Full-screen reader (UI/UX §7.3–7.4, READER_ENGINE_SPECIFICATION.md §13).
@@ -185,7 +188,17 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           ),
         ],
       ),
-      child: view,
+      // Paginated PDFs show one fixed page: the app turns pages on a swipe
+      // instead of letting the engine pan between them.
+      child: SwipePageTurner(
+        enabled:
+            state.book.format == PublicationFormat.pdf &&
+            ref.watch(readerPreferencesProvider).pdfLayout ==
+                PageLayout.paginated,
+        onNext: controller.goForward,
+        onPrevious: controller.goBackward,
+        child: view,
+      ),
     );
   }
 

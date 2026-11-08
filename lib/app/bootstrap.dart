@@ -39,14 +39,11 @@ Future<void> bootstrap() async {
     storage = await LibraryStorage.open(
       Directory(p.join(supportDirectory.path, 'library')),
     );
-    final cleanup = await storage.cleanUpStaging(now: DateTime.now());
+    // Nothing else runs yet, so every staging entry is a leftover.
+    final cleanup = await storage.clearStaging();
     logger.info(
       'storage.staging_cleanup',
-      fields: {
-        'removed': cleanup.removed,
-        'kept': cleanup.kept,
-        'failed': cleanup.failed,
-      },
+      fields: {'removed': cleanup.removed, 'failed': cleanup.failed},
     );
     database = AppDatabase.open(
       File(p.join(supportDirectory.path, databaseFileName)),

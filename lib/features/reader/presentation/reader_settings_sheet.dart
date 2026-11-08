@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/providers.dart';
 import '../../../app/theme/app_spacing_tokens.dart';
 import '../../../domain/entities/enums.dart';
 import '../../../domain/entities/reader_preferences.dart';
@@ -59,6 +60,7 @@ class _ReaderSettingsSheetState extends ConsumerState<ReaderSettingsSheet> {
     final preferences = ref.watch(readerPreferencesProvider);
     final text = Theme.of(context).textTheme;
     final isEpub = widget.format == PublicationFormat.epub;
+    final pageFit = ref.read(publicationReaderProvider).supportsPdfPageFit;
 
     Widget heading(String label) => Padding(
       padding: const EdgeInsets.only(
@@ -162,15 +164,17 @@ class _ReaderSettingsSheetState extends ConsumerState<ReaderSettingsSheet> {
                 preferences.pdfLayout,
                 (layout) => _update(preferences.copyWith(pdfLayout: layout)),
               ),
-              heading('Page fit'),
-              choice<PdfPageFit>(
-                const [
-                  (PdfPageFit.width, 'Fit width'),
-                  (PdfPageFit.page, 'Whole page'),
-                ],
-                preferences.pdfFit,
-                (fit) => _update(preferences.copyWith(pdfFit: fit)),
-              ),
+              if (pageFit) ...[
+                heading('Page fit'),
+                choice<PdfPageFit>(
+                  const [
+                    (PdfPageFit.width, 'Fit width'),
+                    (PdfPageFit.page, 'Whole page'),
+                  ],
+                  preferences.pdfFit,
+                  (fit) => _update(preferences.copyWith(pdfFit: fit)),
+                ),
+              ],
             ],
             const SizedBox(height: AppSpacing.space24),
             TextButton.icon(

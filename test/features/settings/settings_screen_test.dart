@@ -9,6 +9,8 @@ import 'package:thaal/domain/entities/app_preferences.dart';
 import 'package:thaal/features/settings/application/app_theme_controller.dart';
 import 'package:thaal/features/settings/presentation/settings_screen.dart';
 
+import '../../support/large_text.dart';
+
 /// A store whose writes fail.
 class _FailingStore extends AppPreferencesStore {
   _FailingStore(super.prefs);
@@ -104,5 +106,12 @@ void main() {
       appBrightnessFor(AppThemePreference.dark, Brightness.light),
       Brightness.dark,
     );
+  });
+
+  testWidgets('fits a small phone with large text', (tester) async {
+    useSmallPhoneWithLargeText(tester);
+    await pump(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('Dark'), findsOneWidget);
   });
 }

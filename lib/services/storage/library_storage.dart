@@ -28,9 +28,6 @@ class LibraryStorage {
   static final ManagedPath booksDir = ManagedPath.parse('books');
   static final ManagedPath stagingDir = ManagedPath.parse('staging');
 
-  /// Default age after which a staging directory counts as abandoned.
-  static const Duration defaultStagingMaxAge = Duration(hours: 1);
-
   final Directory root;
 
   /// Creates the library directories under [libraryRoot] if needed.
@@ -190,36 +187,28 @@ class LibraryStorage {
     });
   }
 
-  /// Deletes staging entries last modified more than [maxAge] before [now].
+  /// Deletes everything in the staging area.
   ///
-  /// Staging entries are never referenced by the database, so an old one can
-  /// only be left over from an interrupted operation. The age threshold
-  /// protects work started moments ago (DATABASE_SCHEMA.md §12). Entries
-  /// that cannot be deleted are kept and counted as [StagingCleanup.failed].
-  Future<StagingCleanup> cleanUpStaging({
-    required DateTime now,
-    Duration maxAge = defaultStagingMaxAge,
-  }) async {
+  /// Call only at startup, before any import, removal, backup or restore can
+  /// run: staging entries are never referenced by the database, so at that
+  /// point each one is left over from an operation the previous process did
+  /// not finish (DATABASE_SCHEMA.md §12). Entries that cannot be deleted are
+  /// kept and counted as [StagingCleanup.failed].
+  Future<StagingCleanup> clearStaging() async {
     var removed = 0;
-    var kept = 0;
     var failed = 0;
     final entries = await _io('list staging', () {
       return _directory(stagingDir).list(followLinks: false).toList();
     });
     for (final entry in entries) {
       try {
-        final modified = (await entry.stat()).modified;
-        if (now.difference(modified) < maxAge) {
-          kept++;
-          continue;
-        }
         await entry.delete(recursive: true);
         removed++;
       } on FileSystemException {
         failed++;
       }
     }
-    return StagingCleanup(removed: removed, kept: kept, failed: failed);
+    return StagingCleanup(removed: removed, failed: failed);
   }
 
   Directory _directory(ManagedPath path) => Directory(_absolute(path));
@@ -262,16 +251,11 @@ class LibraryStorage {
   }
 }
 
-/// Result of [LibraryStorage.cleanUpStaging]. Counts only, so it is safe to
+/// Result of [LibraryStorage.clearStaging]. Counts only, so it is safe to
 /// log.
 final class StagingCleanup {
-  const StagingCleanup({
-    required this.removed,
-    required this.kept,
-    required this.failed,
-  });
+  const StagingCleanup({required this.removed, required this.failed});
 
   final int removed;
-  final int kept;
   final int failed;
 }

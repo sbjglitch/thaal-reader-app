@@ -131,21 +131,14 @@ void main() {
     expect(await Directory('${root.path}/books/drop').exists(), isFalse);
   });
 
-  test(
-    'staging cleanup removes only entries older than the threshold',
-    () async {
-      final area = await storage.createStagingArea();
-      await storage.copyIntoStaging(source, area, 'partial.epub');
+  test('startup cleanup removes every staging entry', () async {
+    final area = await storage.createStagingArea();
+    await storage.copyIntoStaging(source, area, 'partial.epub');
+    await storage.createStagingArea();
 
-      final fresh = await storage.cleanUpStaging(now: DateTime.now());
-      expect((fresh.removed, fresh.kept), (0, 1));
-
-      final old = await storage.cleanUpStaging(
-        now: DateTime.now().add(const Duration(hours: 2)),
-      );
-      expect((old.removed, old.kept, old.failed), (1, 0, 0));
-      expect(await Directory('${root.path}/staging').list().toList(), isEmpty);
-      expect(await Directory('${root.path}/books').exists(), isTrue);
-    },
-  );
+    final cleanup = await storage.clearStaging();
+    expect((cleanup.removed, cleanup.failed), (2, 0));
+    expect(await Directory('${root.path}/staging').list().toList(), isEmpty);
+    expect(await Directory('${root.path}/books').exists(), isTrue);
+  });
 }

@@ -229,6 +229,10 @@ abstract interface class PublicationReader {
   /// and when nothing is open; callers hide highlight controls then.
   bool get supportsHighlights;
 
+  /// Whether the "whole page" PDF fit is applied. Callers hide the page
+  /// fit choice when it is not.
+  bool get supportsPdfPageFit;
+
   /// Replaces every highlight drawn over the open publication. Highlights
   /// whose locator the engine cannot read are skipped, not deleted.
   /// Returns false when they could not be applied.

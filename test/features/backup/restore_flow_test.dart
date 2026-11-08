@@ -13,6 +13,7 @@ import 'package:thaal/services/backup/restore_plan.dart';
 import 'package:thaal/services/import/document_picker.dart';
 
 import '../../support/fixtures.dart';
+import '../../support/large_text.dart';
 import 'backup_section_test.dart' show TestSaver;
 
 class _Picker implements DocumentPicker {
@@ -214,5 +215,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Restore failed'), findsOneWidget);
     expect(find.textContaining('not enough storage'), findsOneWidget);
+  });
+
+  testWidgets('the preview fits a small phone with large text', (tester) async {
+    useSmallPhoneWithLargeText(tester);
+    restorer.inspection = ready();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
+          backupSaverProvider.overrideWithValue(TestSaver()),
+          documentPickerProvider.overrideWithValue(picker),
+          backupRestoreServiceProvider.overrideWithValue(restorer),
+        ],
+        child: MaterialApp(theme: AppTheme.light, home: const SettingsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Restore backup'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(find.text('Restore backup'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Restore backup'));
+    await tester.pumpAndSettle();
+    expect(find.text('Restore backup?'), findsOneWidget);
   });
 }

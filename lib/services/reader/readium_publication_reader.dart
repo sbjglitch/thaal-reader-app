@@ -272,6 +272,12 @@ class ReadiumPublicationReader implements PublicationReader {
   };
 
   @override
+  // Readium's Android PDF engine (Pdfium adapter, toolkit 3.4.0) only acts
+  // on fit width; "whole page" is passed through and ignored, so pages are
+  // always fitted to the width. Not yet verified on iOS (on hold).
+  bool get supportsPdfPageFit => false;
+
+  @override
   bool get supportsHighlights =>
       _publication != null && _format == PublicationFormat.epub;
 

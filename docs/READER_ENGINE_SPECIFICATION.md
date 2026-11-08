@@ -509,6 +509,28 @@ changelog documents a change to Android PDF's default layout in version
 0.7.0, so set the desired app default explicitly rather than relying on
 a package default.
 
+Android findings (flutter_readium 0.9.0, Readium Kotlin 3.4.0, phone
+testing 8 Nov 2026):
+
+-   Paginated PDF is a horizontal strip of pages with page snap and page
+    fling, not a strict single-page view; the plugin offers no way to
+    disable swiping.
+-   Fit: page is passed to the Pdfium navigator but ignored: only fit
+    width is acted on, so portrait pages are always fitted to the width
+    and are taller than a phone screen. The app hides the page fit
+    choice (`PublicationReader.supportsPdfPageFit` is false); recheck on
+    iOS and after upgrades.
+-   To show one fixed page, the reader screen takes over one-finger
+    drags on paginated PDFs (`SwipePageTurner`): they never reach the
+    engine view, so the page cannot pan, and a sideways swipe or flick
+    turns the page through the adapter's `goForward`/`goBackward`
+    (left-to-right reading assumed). Taps and pinch zoom still reach the
+    engine. Handing only the sideways part of a drag to the engine is
+    not possible: once the native view owns a gesture it pans freely.
+    This depends on the plugin creating its Android view with no gesture
+    recognizers of its own. Trade-offs: the page does not follow the
+    finger during a swipe, and a zoomed-in page cannot be panned.
+
 ### 8.3 PDF annotations
 
 MVP includes PDF page position and page bookmarks only.

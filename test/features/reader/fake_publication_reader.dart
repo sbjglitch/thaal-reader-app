@@ -20,6 +20,9 @@ class FakePublicationReader implements PublicationReader {
   final applied = <ReaderAppearance>[];
   final visited = <LocatorEnvelope>[];
   bool acceptAppearance = true;
+
+  @override
+  bool supportsPdfPageFit = true;
   PublicationFormat? _format;
 
   /// Every set passed to [showHighlights], latest last.

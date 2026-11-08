@@ -717,9 +717,12 @@ match the stored publication file.
 Suggested reconciliation: 1. On startup or library maintenance,
 enumerate known book files. 2. Compare known paths with database
 records. 3. Report missing files and offer a remove/relink recovery
-path. 4. Clean abandoned staging files only after a safe age threshold
-and confirmation rules. 5. Do not automatically delete unknown files
-that may be in-progress imports or backups.
+path. 4. At startup, before any operation can run, delete everything in
+`staging/`: nothing references it, so each entry is left over from an
+interrupted operation. (Changed 8 Nov 2026 from a one-hour age
+threshold, which kept large leftovers, such as a 320 MB partial import,
+until a later launch.) 5. Do not automatically delete unknown files
+outside `staging/` that may be in-progress imports or backups.
 
 ## 13. Testing requirements
 

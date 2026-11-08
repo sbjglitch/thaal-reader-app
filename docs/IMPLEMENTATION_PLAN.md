@@ -548,7 +548,10 @@ establishes a stable, low-risk implementation and the PRD is updated.
     explicitly approved. (Milestone 6.)
 
 Reading themes, EPUB text size, page layout and PDF fit were built in
-Milestone 4 as global settings (none are per-book).
+Milestone 4 as global settings (none are per-book). After phone testing
+(8 Nov 2026), paginated PDFs show one fixed page that swipes turn, and the page fit
+choice is hidden on Android because the engine ignores "whole page" (see
+READER_ENGINE_SPECIFICATION.md §8.2).
 
 Implementation notes (Milestone 5c):
 
@@ -758,26 +761,100 @@ Known limitations:
 -   [ ] Verify app behavior in airplane mode.
 -   [ ] Review privacy disclosures and permissions.
 
+Progress (7a, 8 Nov 2026):
+
+-   Release permissions: flutter_readium declares network, foreground
+    media playback, notification and download permissions, a cleartext
+    traffic flag and an exported media service for its read-aloud,
+    audiobook and remote-publication features. Thaal uses none of them,
+    so the app manifest removes them; the release APK now requests no
+    permissions at all. Debug and profile builds keep INTERNET for the
+    Flutter tool. The WebView opts out of usage metrics and Safe
+    Browsing. Re-check the merged manifest when upgrading
+    flutter_readium.
+-   Android backup: off (decided 8 Nov 2026). `allowBackup="false"` and
+    data extraction rules exclude everything from Google cloud backup
+    and device-to-device transfer, so the library never leaves the
+    device; people move it with Thaal's own backup file. Mention this in
+    the store listing's privacy information.
+-   Temporary files: none left in the app cache or staging area on the
+    phone after imports, backups and restores.
+-   Logs: fields are ids, counts, formats and outcomes; paths and long
+    text are redacted by the logger, and release builds log warnings and
+    errors only.
+-   Accessible labels: every icon button has a tooltip; book covers are
+    decorative and excluded from semantics, with the title read instead.
+-   Small phone with large text: widget tests render the library (list
+    and grid, empty, error, missing file), book details, reader (open,
+    contents, problems), bookmarks, settings and the restore preview at
+    320×568 with 200% text; nothing overflows.
+-   Release build on the phone (8 Nov 2026): with no permissions and
+    R8 shrinking, importing an EPUB, reading it and adding a bookmark
+    worked; the position and bookmark were saved, the log showed no app
+    errors and no blocked network calls. A PDF has not yet been opened
+    in a release build.
+-   Still to do on the device: airplane mode, TalkBack, a tablet-size
+    screen and system theme changes.
+
 ### Reliability
 
 -   [ ] Test app process death during reading.
--   [ ] Test app process death during import.
--   [ ] Test app process death during backup and restore.
+-   [x] Test app process death during import.
+-   [x] Test app process death during backup and restore.
 -   [ ] Test insufficient storage.
--   [ ] Test missing or externally removed files.
--   [ ] Test corrupted EPUB/PDF files.
--   [ ] Test corrupted backup archives.
+-   [x] Test missing or externally removed files (library-only restore
+    shows "File missing"; re-importing the file relinks it).
+-   [x] Test corrupted EPUB/PDF files.
+-   [x] Test corrupted backup archives.
 -   [ ] Test database migration from the prior released schema.
 -   [ ] Test repeated reader open/close cycles.
 -   [ ] Test large libraries and representative large publications.
 
+Phone session (7b, 8 Nov 2026, debug build, synthetic test files). The
+app was force-stopped over adb at the moment an operation was in
+progress, then relaunched; after each step every book file matched its
+stored checksum and no reading data pointed at a missing book.
+
+-   Import of a 320 MB PDF killed after the copy: no book added.
+-   Full backup killed while the archive was written: library unchanged,
+    nothing saved to Downloads.
+-   Restore commit: a kill on the journal's appearance landed after the
+    commit (it takes well under 100 ms), so the restore completed; a
+    full restore of a 300 MB EPUB took 4.8 s. Recovery was tested by
+    recreating the state a mid-commit crash leaves (a moved-in book
+    directory without a record, plus the journal) with the app stopped:
+    on launch it removed that directory, kept the journal's book that
+    had a record, and removed the journal and staging areas.
+-   Broken files (empty, random bytes, text named .pdf, truncated EPUB
+    and PDF, a ZIP that is not an EPUB) were refused; nothing was added.
+-   Damaged backups (truncated, one flipped byte, random bytes) were
+    refused before anything changed.
+-   Library-only restore brought a removed book back as "File missing";
+    importing the same file relinked it, keeping its id and checksum.
+-   Large files: a 300 MB EPUB imported in 5.3 s.
+-   Finding: an interrupted operation's staging files (here 320 MB) stay
+    until a launch at least an hour later, because startup cleanup only
+    removed entries older than an hour. Fixed: startup now clears all of
+    `staging/` (DATABASE_SCHEMA.md §12).
+-   Not yet run: process death while reading, low storage, repeated
+    reader open/close, large libraries.
+
 ### Release preparation
 
--   [ ] Configure app icon and launch screen.
--   [ ] Configure package/application ID.
--   [ ] Configure signing and release build.
--   [ ] Verify app version and build number.
--   [ ] Prepare store listing assets and privacy information.
+-   [ ] Configure app icon and launch screen. Launch screen done (app
+    background colour, light and dark; system splash on Android 12+).
+    The icon is still Flutter's default; the final icon will be supplied.
+-   [x] Configure package/application ID (`com.sbjglitch.thaal`).
+-   [x] Configure signing and release build. Release builds use the
+    upload key from `android/key.properties` (git-ignored) and fall back
+    to the debug key with a warning; verified with a throwaway key. The
+    real upload key is still to be created (`docs/RELEASE.md` §1).
+-   [x] Verify app version and build number (`1.0.0+1` from
+    `pubspec.yaml`).
+-   [ ] Prepare store listing assets and privacy information. Draft
+    listing text, data safety answers and privacy policy are in
+    `docs/RELEASE.md`; the icon, feature graphic, screenshots and a
+    hosted policy URL are still needed.
 -   [ ] Run release-mode smoke tests.
 -   [ ] Create a release candidate.
 -   [ ] Resolve all critical and high-severity defects.

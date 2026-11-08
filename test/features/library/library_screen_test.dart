@@ -13,6 +13,7 @@ import 'package:thaal/services/import/document_picker.dart';
 import 'package:thaal/services/import/import_service.dart';
 
 import '../../support/fixtures.dart';
+import '../../support/large_text.dart';
 import 'import_controller_test.dart' show FakeImportService, FakePicker;
 
 void main() {
@@ -254,5 +255,47 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Reading · 27%'), findsOneWidget);
+  });
+
+  group('small phone, large text', () {
+    final items = [
+      LibraryItem(book: sampleBook(title: longTitle), fileAvailable: true),
+      LibraryItem(
+        book: sampleBook(
+          id: 'book-2',
+          title: longTitle,
+          format: PublicationFormat.pdf,
+        ),
+        fileAvailable: false,
+      ),
+    ];
+
+    testWidgets('list layout fits', (tester) async {
+      useSmallPhoneWithLargeText(tester);
+      await pump(tester, () => Stream.value(items));
+      expect(find.text('File missing'), findsOneWidget);
+    });
+
+    testWidgets('grid layout fits', (tester) async {
+      useSmallPhoneWithLargeText(tester);
+      await pump(
+        tester,
+        () => Stream.value(items),
+        preferences: {'library.layout': 'grid'},
+      );
+      expect(find.text('File missing'), findsOneWidget);
+    });
+
+    testWidgets('empty state fits', (tester) async {
+      useSmallPhoneWithLargeText(tester);
+      await pump(tester, () => Stream.value(const []));
+      expect(find.text('Your library is empty'), findsOneWidget);
+    });
+
+    testWidgets('error state fits', (tester) async {
+      useSmallPhoneWithLargeText(tester);
+      await pump(tester, () => Stream.error(StateError('db')));
+      expect(find.text('Try again'), findsOneWidget);
+    });
   });
 }

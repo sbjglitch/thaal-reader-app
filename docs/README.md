@@ -172,6 +172,7 @@ Read the relevant specifications before implementing a feature.
 | `IMPLEMENTATION_PLAN.md` | Development milestones and acceptance criteria |
 | `READER_ENGINE_SPECIFICATION.md` | Reader adapter and engine integration |
 | `TESTING_STRATEGY.md` | Test coverage, platform matrix, and release gates |
+| `RELEASE.md` | Android signing, release builds, store listing and privacy drafts |
 | `ARCHITECTURE_DECISIONS.md` | Accepted architecture decisions |
 | `UI_UX_SPECIFICATION.md` | Visual direction, design tokens, screens, and UI states |
 | `CLAUDE.md` | Claude Code instructions and development workflow |

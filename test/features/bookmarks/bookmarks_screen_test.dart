@@ -11,6 +11,7 @@ import 'package:thaal/features/bookmarks/application/bookmarks.dart';
 import 'package:thaal/features/bookmarks/presentation/bookmarks_screen.dart';
 
 import '../../support/fixtures.dart';
+import '../../support/large_text.dart';
 import 'fake_bookmarks.dart';
 
 Bookmark _bookmark(
@@ -171,5 +172,13 @@ void main() {
     );
     await pump(tester);
     expect(find.text('Location unavailable'), findsOneWidget);
+  });
+
+  testWidgets('fits a small phone with large text', (tester) async {
+    useSmallPhoneWithLargeText(tester);
+    await pump(tester);
+    expect(find.text('No bookmarks yet'), findsOneWidget);
+    repository.items.add(_bookmark('one', title: longTitle, minute: 1));
+    await pump(tester, missingFiles: {'book-1'});
   });
 }

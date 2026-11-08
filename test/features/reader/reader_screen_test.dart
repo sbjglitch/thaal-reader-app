@@ -3,19 +3,23 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:thaal/app/providers.dart';
 import 'package:thaal/app/theme/app_theme.dart';
 import 'package:thaal/core/errors/app_errors.dart';
 import 'package:thaal/domain/entities/enums.dart';
 import 'package:thaal/domain/entities/locator_envelope.dart';
+import 'package:thaal/domain/entities/reader_preferences.dart';
 import 'package:thaal/domain/entities/reading_data.dart';
 import 'package:thaal/features/bookmarks/application/bookmarks.dart';
 import 'package:thaal/features/highlights/application/highlights.dart';
 import 'package:thaal/features/reader/application/reader_controller.dart';
 import 'package:thaal/features/reader/presentation/reader_screen.dart';
+import 'package:thaal/features/reader/presentation/swipe_page_turner.dart';
 import 'package:thaal/services/reader/publication_reader.dart';
 
 import '../../support/fixtures.dart';
+import '../../support/large_text.dart';
 import '../bookmarks/fake_bookmarks.dart';
 import '../highlights/fake_highlights.dart';
 import '../highlights/highlight_widgets_test.dart' show sampleHighlight;
@@ -65,12 +69,19 @@ void main() {
     highlights = MemoryHighlightRepository();
   });
 
-  Future<void> pump(WidgetTester tester, ReaderState state) async {
+  Future<void> pump(
+    WidgetTester tester,
+    ReaderState state, {
+    Map<String, Object> preferences = const {},
+  }) async {
+    SharedPreferences.setMockInitialValues(preferences);
+    final prefs = await SharedPreferences.getInstance();
     reader = FakePublicationReader();
     final book = state is ReaderOpen ? state.book : sampleBook();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(prefs),
           publicationReaderProvider.overrideWithValue(reader),
           bookmarkRepositoryProvider.overrideWithValue(bookmarks),
           locatorInterpreterProvider.overrideWithValue(
@@ -366,5 +377,79 @@ void main() {
     await tester.pumpAndSettle();
     expect(bookmarks.items.single.label, 'Keep');
     expect(find.text('Keep'), findsOneWidget); // Still in the open list.
+  });
+
+  group('small phone, large text', () {
+    testWidgets('an open book fits', (tester) async {
+      useSmallPhoneWithLargeText(tester);
+      await pump(
+        tester,
+        ReaderOpen(
+          book: sampleBook(title: longTitle),
+          toc: const [TocEntry(index: 0, title: longTitle, depth: 0)],
+          ready: true,
+          position: position('c1', progression: 0.5),
+        ),
+      );
+      await tester.tap(find.byTooltip('Contents'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('problems fit', (tester) async {
+      useSmallPhoneWithLargeText(tester);
+      for (final problem in ReaderProblem.values) {
+        await pump(tester, ReaderUnavailable(problem));
+      }
+    });
+  });
+
+  group('swipe page turning', () {
+    bool locked(WidgetTester tester) =>
+        tester.widget<SwipePageTurner>(find.byType(SwipePageTurner)).enabled;
+
+    testWidgets('is on for paginated PDFs', (tester) async {
+      await pump(
+        tester,
+        ReaderOpen(
+          book: sampleBook(format: PublicationFormat.pdf),
+          toc: const [],
+        ),
+      );
+      expect(locked(tester), isTrue);
+    });
+
+    testWidgets('a swipe on a PDF page turns it', (tester) async {
+      await pump(
+        tester,
+        ReaderOpen(
+          book: sampleBook(format: PublicationFormat.pdf),
+          toc: const [],
+          ready: true,
+        ),
+      );
+      await tester.drag(
+        find.byKey(const Key('engine-view')),
+        const Offset(-200, 0),
+      );
+      await tester.pump();
+      expect(controller!.calls, ['forward']);
+    });
+
+    testWidgets('is off for scrolling PDFs', (tester) async {
+      await pump(
+        tester,
+        ReaderOpen(
+          book: sampleBook(format: PublicationFormat.pdf),
+          toc: const [],
+        ),
+        preferences: {'reader.pdf.layout': PageLayout.scroll.name},
+      );
+      expect(locked(tester), isFalse);
+    });
+
+    testWidgets('is off for EPUB', (tester) async {
+      await pump(tester, ReaderOpen(book: sampleBook(), toc: const []));
+      expect(locked(tester), isFalse);
+    });
   });
 }

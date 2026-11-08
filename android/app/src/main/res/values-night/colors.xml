@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the app's background colour token (dark). -->
+    <color name="launch_background">#121416</color>
+</resources>

@@ -9,6 +9,8 @@ import 'package:thaal/domain/entities/reader_preferences.dart';
 import 'package:thaal/features/reader/application/reader_controller.dart';
 import 'package:thaal/features/reader/presentation/reader_settings_sheet.dart';
 
+import 'fake_publication_reader.dart';
+
 /// Whether the next controller created accepts changes. The controller is
 /// created lazily on the first change, so tests set this beforehand.
 var _accept = true;
@@ -34,13 +36,20 @@ void main() {
 
   setUp(() => _accept = true);
 
-  Future<void> pump(WidgetTester tester, PublicationFormat format) async {
+  Future<void> pump(
+    WidgetTester tester,
+    PublicationFormat format, {
+    bool pageFit = true,
+  }) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
+          publicationReaderProvider.overrideWithValue(
+            FakePublicationReader()..supportsPdfPageFit = pageFit,
+          ),
           readerControllerProvider.overrideWith2(
             (request) => controller = _RecordingController(request),
           ),
@@ -79,6 +88,13 @@ void main() {
     await tester.tap(find.text('Whole page'));
     await tester.pump();
     expect(controller.updates.single.pdfFit, PdfPageFit.page);
+  });
+
+  testWidgets('PDF hides page fit when the engine ignores it', (tester) async {
+    await pump(tester, PublicationFormat.pdf, pageFit: false);
+    expect(find.text('Page turning'), findsOneWidget);
+    expect(find.text('Page fit'), findsNothing);
+    expect(find.text('Whole page'), findsNothing);
   });
 
   testWidgets('reset restores the defaults for this format', (tester) async {

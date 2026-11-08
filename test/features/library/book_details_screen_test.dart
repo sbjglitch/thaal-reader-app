@@ -8,6 +8,7 @@ import 'package:thaal/features/library/presentation/book_details_screen.dart';
 import 'package:thaal/services/library/book_removal_service.dart';
 
 import '../../support/fixtures.dart';
+import '../../support/large_text.dart';
 
 class _FakeRemoval implements BookRemovalService {
   final removed = <String>[];
@@ -108,5 +109,13 @@ void main() {
       find.text('The book could not be removed. Nothing was changed.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('fits a small phone with large text', (tester) async {
+    useSmallPhoneWithLargeText(tester);
+    await pump(tester, [
+      LibraryItem(book: sampleBook(title: longTitle), fileAvailable: false),
+    ]);
+    expect(find.text(longTitle), findsWidgets);
   });
 }
