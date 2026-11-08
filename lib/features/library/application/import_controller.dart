@@ -40,6 +40,8 @@ final class ImportFinished extends ImportState {
 
   List<ImportSucceeded> get imported =>
       results.whereType<ImportSucceeded>().toList();
+  List<ImportRelinked> get relinked =>
+      results.whereType<ImportRelinked>().toList();
   List<ImportDuplicate> get duplicates =>
       results.whereType<ImportDuplicate>().toList();
   List<ImportFailed> get failures => results.whereType<ImportFailed>().toList();

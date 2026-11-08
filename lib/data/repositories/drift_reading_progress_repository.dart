@@ -17,17 +17,7 @@ class DriftReadingProgressRepository implements ReadingProgressRepository {
         final row = await (_db.select(
           _db.readingProgressEntries,
         )..where((t) => t.bookId.equals(bookId))).getSingleOrNull();
-        if (row == null) return null;
-        final locatorJson = row.locatorJson;
-        return ReadingProgress(
-          bookId: row.bookId,
-          locator: locatorJson == null
-              ? null
-              : SerializedLocator.stored(locatorJson),
-          pageNumber: row.pageNumber,
-          progression: row.progression,
-          updatedAt: fromEpochMillis(row.updatedAt),
-        );
+        return row == null ? null : progressFromRow(row);
       });
 
   /// A single upsert statement, so a failed write leaves the previous
@@ -73,4 +63,16 @@ class DriftReadingProgressRepository implements ReadingProgressRepository {
       },
     );
   }
+}
+
+/// Maps a stored row to the domain entity. Visible for the data layer.
+ReadingProgress progressFromRow(ReadingProgressRow row) {
+  final locatorJson = row.locatorJson;
+  return ReadingProgress(
+    bookId: row.bookId,
+    locator: locatorJson == null ? null : SerializedLocator.stored(locatorJson),
+    pageNumber: row.pageNumber,
+    progression: row.progression,
+    updatedAt: fromEpochMillis(row.updatedAt),
+  );
 }

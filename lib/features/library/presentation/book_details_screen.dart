@@ -214,7 +214,8 @@ class _MissingFileNotice extends StatelessWidget {
           const Expanded(
             child: Text(
               'The file for this book is missing, so it cannot be opened. '
-              'You can remove it and import the file again.',
+              'Import the same file again to restore it; its reading '
+              'progress, bookmarks and highlights are kept.',
             ),
           ),
         ],

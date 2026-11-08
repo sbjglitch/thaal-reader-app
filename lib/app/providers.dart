@@ -1,21 +1,30 @@
 import 'package:flutter_readium/flutter_readium.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/logging/app_logger.dart';
 import '../data/database/app_database.dart';
+import '../data/preferences/app_preferences_store.dart';
+import '../data/preferences/backup_preferences.dart';
 import '../data/preferences/reader_preferences_store.dart';
 import '../data/repositories/drift_book_repository.dart';
 import '../data/repositories/drift_bookmark_repository.dart';
 import '../data/repositories/drift_collection_repository.dart';
 import '../data/repositories/drift_highlight_repository.dart';
+import '../data/repositories/drift_library_snapshot_repository.dart';
 import '../data/repositories/drift_reading_progress_repository.dart';
 import '../domain/repositories/book_repository.dart';
 import '../domain/repositories/bookmark_repository.dart';
 import '../domain/repositories/collection_repository.dart';
 import '../domain/repositories/highlight_repository.dart';
+import '../domain/repositories/library_snapshot_repository.dart';
 import '../domain/repositories/reading_progress_repository.dart';
 import '../domain/services/publication_inspector.dart';
+import '../services/backup/backup_export_service.dart';
+import '../services/backup/backup_format.dart';
+import '../services/backup/backup_restore_service.dart';
+import '../services/backup/backup_saver.dart';
 import '../services/import/document_picker.dart';
 import '../services/import/import_service.dart';
 import '../services/library/book_removal_service.dart';
@@ -46,6 +55,10 @@ final libraryStorageProvider = Provider<LibraryStorage>(
 final sharedPreferencesProvider = Provider<SharedPreferences>(
   (ref) =>
       throw UnimplementedError('sharedPreferencesProvider is not overridden'),
+);
+
+final appPreferencesStoreProvider = Provider<AppPreferencesStore>(
+  (ref) => AppPreferencesStore(ref.watch(sharedPreferencesProvider)),
 );
 
 final readerPreferencesStoreProvider = Provider<ReaderPreferencesStore>(
@@ -113,3 +126,41 @@ final bookRemovalServiceProvider = Provider<BookRemovalService>(
     logger: ref.watch(appLoggerProvider),
   ),
 );
+
+final librarySnapshotRepositoryProvider = Provider<LibrarySnapshotRepository>(
+  (ref) => DriftLibrarySnapshotRepository(ref.watch(appDatabaseProvider)),
+);
+
+final backupSaverProvider = Provider<BackupSaver>(
+  (ref) => const PlatformBackupSaver(),
+);
+
+final backupExportServiceProvider = Provider<BackupExportService>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return BackupExportService(
+    snapshots: ref.watch(librarySnapshotRepositoryProvider),
+    storage: ref.watch(libraryStorageProvider),
+    saver: ref.watch(backupSaverProvider),
+    appInfo: () async {
+      final info = await PackageInfo.fromPlatform();
+      return BackupAppInfo(
+        name: info.appName,
+        version: info.version,
+        buildNumber: info.buildNumber,
+      );
+    },
+    readPreferences: () => BackupPreferences.read(prefs),
+    logger: ref.watch(appLoggerProvider),
+  );
+});
+
+final backupRestoreServiceProvider = Provider<BackupRestoreService>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return BackupRestoreService(
+    snapshots: ref.watch(librarySnapshotRepositoryProvider),
+    books: ref.watch(bookRepositoryProvider),
+    storage: ref.watch(libraryStorageProvider),
+    applyPreferences: prefs.applyBackupPreferences,
+    logger: ref.watch(appLoggerProvider),
+  );
+});

@@ -10,6 +10,41 @@
 
 ------------------------------------------------------------------------
 
+## 0. Thaal implementation notes
+
+These notes record decisions made while implementing format version 1.
+Where they differ from the illustrative examples below, the notes apply.
+
+-   `format` is `com.sbjglitch.thaal.backup`.
+-   Archive entries are stored without compression. Readers accept
+    stored and deflated entries only.
+-   Each `books.json` record also carries `fileSizeBytes` and
+    `fileChecksum` (lowercase hex SHA-256), the library's record of the
+    publication file. They are present in library-only backups too, so a
+    restored book can be matched when its file is imported again.
+-   `cover` is `null` when no cover is included.
+-   `preferences.json` is present only when `preferencesIncluded` is true.
+    Its `records` object uses the app's storage keys (`app.theme`,
+    `reader.theme`, `reader.epub.fontScale`, `reader.epub.layout`,
+    `reader.pdf.layout`, `reader.pdf.fit`, `library.layout`,
+    `library.sort`); only these allowlisted keys are written.
+-   Locators are written as the stored locator envelope, unchanged.
+-   Resource limits used when reading an archive: archive 16 GiB,
+    50,000 entries, manifest 32 MiB, each dataset 256 MiB, each
+    publication 2 GiB, each cover 32 MiB, 16 GiB uncompressed in total,
+    and a compression ratio of at most 100:1 for deflated entries over
+    1 MiB.
+-   A full backup is refused when any book's file is missing or does not
+    match its stored checksum; there is no partial full backup.
+-   Restore is merge-only (replace mode is deferred) and skips and
+    reports every conflict (§8.3). Local reading positions are kept.
+    Dataset JSON deeper than 64 levels is rejected before decoding.
+-   A library-only restore stores each book at its normal managed path
+    (`books/<id>/publication.<ext>`) without a file there, which the app
+    shows as "File missing". Importing the same file later fills it in.
+-   Restore commit uses `restore-journal.json` in the library root;
+    see IMPLEMENTATION_PLAN.md §10 (Milestone 6b notes).
+
 ## 1. Purpose
 
 This document defines the portable backup archive used to export and
@@ -777,21 +812,21 @@ reading position where the reader engine supports it.
 
 ## 13. Implementation checklist
 
--   [ ] Define backup domain models independent of Drift.
--   [ ] Define JSON serializers and strict validators.
--   [ ] Implement manifest generation and parsing.
--   [ ] Implement safe archive path validation.
--   [ ] Implement streaming SHA-256 and file-size validation.
--   [ ] Implement full backup export.
--   [ ] Implement library-only export.
--   [ ] Implement temporary export workspace and cleanup.
--   [ ] Implement restore preview.
--   [ ] Implement merge conflict policy.
--   [ ] Implement safe replace mode or defer it.
--   [ ] Implement staged extraction and recoverable commit.
--   [ ] Implement restore-operation recovery after process termination.
+-   [x] Define backup domain models independent of Drift.
+-   [x] Define JSON serializers and strict validators.
+-   [x] Implement manifest generation and parsing.
+-   [x] Implement safe archive path validation.
+-   [x] Implement streaming SHA-256 and file-size validation.
+-   [x] Implement full backup export.
+-   [x] Implement library-only export.
+-   [x] Implement temporary export workspace and cleanup.
+-   [x] Implement restore preview.
+-   [x] Implement merge conflict policy.
+-   [x] Implement safe replace mode or defer it. (Deferred.)
+-   [x] Implement staged extraction and recoverable commit.
+-   [x] Implement restore-operation recovery after process termination.
 -   [ ] Add cross-platform archive fixtures.
--   [ ] Add corruption, path traversal and resource-limit tests.
+-   [x] Add corruption, path traversal and resource-limit tests.
 -   [ ] Document backup compatibility policy in release notes.
 
 ## 14. MVP decisions

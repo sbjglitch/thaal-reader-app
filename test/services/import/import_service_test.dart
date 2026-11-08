@@ -154,6 +154,41 @@ void main() {
     expect(book.coverPath, isNull);
   });
 
+  test(
+    'a file matching a book with a missing file is put back for it',
+    () async {
+      inspector.writeCover = true;
+      final first = (await service().importFile(
+        await sourceFile('Book.epub', epubBytes),
+      ) as ImportSucceeded).book;
+      // As after a library-only restore: the record without its files.
+      await storage.deleteBookFiles(first.id);
+      inspector.calls = 0;
+
+      final result = await service().importFile(
+        await sourceFile('Copy.epub', epubBytes),
+      );
+
+      final book = (result as ImportRelinked).book;
+      expect(book.id, first.id);
+      expect(await storage.exists(book.filePath), isTrue);
+      expect(await storage.exists(book.coverPath!), isTrue);
+      expect(await books.watchBooks().first, hasLength(1));
+      expect(await stagingEntries(), isEmpty);
+    },
+  );
+
+  test(
+    'a file whose book is still present is a duplicate, not a relink',
+    () async {
+      await service().importFile(await sourceFile('Book.epub', epubBytes));
+      final result = await service().importFile(
+        await sourceFile('Copy.epub', epubBytes),
+      );
+      expect(result, isA<ImportDuplicate>());
+    },
+  );
+
   test('rejects unsupported extensions without writing anything', () async {
     final result = await service().importFile(
       await sourceFile('notes.txt', epubBytes),

@@ -41,13 +41,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // The "system" reading theme follows the device's light/dark setting.
-    final brightness = MediaQuery.platformBrightnessOf(context);
+    // The "system" reading theme follows the app's light/dark appearance,
+    // which follows the device unless the app theme is set.
+    final brightness = Theme.of(context).brightness;
     final controller = ref.read(
       readerControllerProvider(widget.request).notifier,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) controller.setPlatformBrightness(brightness);
+      if (mounted) controller.setAppBrightness(brightness);
     });
   }
 

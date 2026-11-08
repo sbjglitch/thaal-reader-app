@@ -11,12 +11,14 @@ import 'package:thaal/data/repositories/drift_book_repository.dart';
 import 'package:thaal/data/repositories/drift_bookmark_repository.dart';
 import 'package:thaal/data/repositories/drift_highlight_repository.dart';
 import 'package:thaal/data/repositories/drift_reading_progress_repository.dart';
+import 'package:thaal/domain/entities/app_preferences.dart';
 import 'package:thaal/domain/entities/enums.dart';
 import 'package:thaal/domain/entities/locator_envelope.dart';
 import 'package:thaal/domain/entities/reader_preferences.dart';
 import 'package:thaal/domain/entities/reading_data.dart';
 import 'package:thaal/features/reader/application/reader_controller.dart';
 import 'package:thaal/features/reader/application/reader_preferences_controller.dart';
+import 'package:thaal/features/settings/application/app_theme_controller.dart';
 import 'package:thaal/services/reader/publication_reader.dart';
 import 'package:thaal/services/storage/library_storage.dart';
 
@@ -444,11 +446,26 @@ void main() {
       expect(container.read(readerPreferencesProvider).fontScale, 1.0);
     });
 
-    test('the system theme follows the device brightness', () async {
+    test('the system reading theme opens in the app theme', () async {
+      await container
+          .read(appThemeProvider.notifier)
+          .select(AppThemePreference.dark);
       await addBook();
       await start();
-      await controller().setPlatformBrightness(Brightness.dark);
-      await controller().setPlatformBrightness(Brightness.light);
+      expect(
+        reader.openedWith?.background,
+        resolveAppearance(
+          const ReaderPreferences(),
+          Brightness.dark,
+        ).background,
+      );
+    });
+
+    test('the system theme follows the app brightness', () async {
+      await addBook();
+      await start();
+      await controller().setAppBrightness(Brightness.dark);
+      await controller().setAppBrightness(Brightness.light);
       final backgrounds = [for (final a in reader.applied) a.background];
       expect(backgrounds, hasLength(2));
       expect(backgrounds.first, isNot(backgrounds.last));

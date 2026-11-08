@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/settings/application/app_theme_controller.dart';
 import 'router.dart';
 import 'theme/app_theme.dart';
 
@@ -14,8 +15,7 @@ class ThaalApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
-      // Follows the system until the theme preference ships with Settings.
-      themeMode: ThemeMode.system,
+      themeMode: themeModeFor(ref.watch(appThemeProvider)),
       routerConfig: ref.watch(routerProvider),
     );
   }

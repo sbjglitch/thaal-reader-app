@@ -538,14 +538,35 @@ establishes a stable, low-risk implementation and the PRD is updated.
 
 ### 5.3 Reading preferences
 
--   [ ] Implement system/light/dark app theme.
--   [ ] Implement reading themes supported by the reader engine.
--   [ ] Implement font size controls.
--   [ ] Persist preferences locally.
--   [ ] Apply preferences on the next reader launch.
--   [ ] Decide which preferences are global and which are per-book.
+-   [x] Implement system/light/dark app theme.
+-   [x] Implement reading themes supported by the reader engine.
+-   [x] Implement font size controls.
+-   [x] Persist preferences locally.
+-   [x] Apply preferences on the next reader launch.
+-   [x] Decide which preferences are global and which are per-book.
 -   [ ] Keep device-specific preferences out of portable backups unless
-    explicitly approved.
+    explicitly approved. (Milestone 6.)
+
+Reading themes, EPUB text size, page layout and PDF fit were built in
+Milestone 4 as global settings (none are per-book).
+
+Implementation notes (Milestone 5c):
+
+-   Settings has an Appearance section with Theme: System / Light /
+    Dark, stored as `app.theme` in SharedPreferences (default System;
+    an unknown value reads as System). The app switches only after the
+    value has been saved; a failed save keeps the current theme and
+    says so.
+-   The reader's "System" reading theme now follows the app's
+    appearance rather than the device's (UI/UX §3.4: "follows the
+    application/system theme"). Light and Dark reading themes are
+    unchanged.
+-   Other suggested Settings sections are not shown yet: reading
+    defaults live in the reader settings sheet, backup arrives with
+    Milestone 6, and app version needs a new dependency.
+
+Verified on the Android phone (8 Nov 2026): switching System / Light /
+Dark, and the choice kept after restarting the app.
 
 ### Deliverables
 
@@ -561,6 +582,7 @@ establishes a stable, low-risk implementation and the PRD is updated.
 -   Notes remain available even if a highlight cannot be reapplied.
 -   Preference changes persist and apply consistently.
 
+
 ## 10. Milestone 6 --- Backup and restore
 
 **Objective:** Give users a portable way to protect and migrate their
@@ -570,35 +592,127 @@ Implement according to `BACKUP_FORMAT.md`.
 
 ### 6.1 Export
 
--   [ ] Implement backup domain models independent of Drift.
--   [ ] Implement JSON serializers for each dataset.
--   [ ] Implement manifest generation.
--   [ ] Implement full backup export.
--   [ ] Implement library-only backup export.
--   [ ] Include publication files and covers for full backups.
--   [ ] Calculate SHA-256 and sizes for every declared entry.
--   [ ] Build ZIP archives in a temporary workspace.
--   [ ] Re-open and validate the completed archive.
--   [ ] Export through the platform save/share flow.
--   [ ] Clean up temporary files after success or cancellation.
+-   [x] Implement backup domain models independent of Drift.
+-   [x] Implement JSON serializers for each dataset.
+-   [x] Implement manifest generation.
+-   [x] Implement full backup export.
+-   [x] Implement library-only backup export.
+-   [x] Include publication files and covers for full backups.
+-   [x] Calculate SHA-256 and sizes for every declared entry.
+-   [x] Build ZIP archives in a temporary workspace.
+-   [x] Re-open and validate the completed archive.
+-   [x] Export through the platform save/share flow.
+-   [x] Clean up temporary files after success or cancellation.
+
+Implementation notes (Milestone 6a):
+
+-   Settings has a Data section with "Create full backup" and "Create
+    library-only backup" (Android only, while iOS is on hold). Each
+    explains what the backup includes and that it is not encrypted, and
+    offers "Include settings" (default on).
+-   The archive is built in a staging area: manifest first, then the
+    datasets, then each publication and its cover, stored without
+    compression (`archive` 4.6.0). Archive work and hashing run on a
+    background isolate.
+-   Publication files are archived straight from the library rather than
+    copied into the workspace first (BACKUP_FORMAT.md §7.1 step 3). Each is
+    hashed first and compared with the library's stored checksum; the
+    finished archive is then reopened and every entry rehashed, so a file
+    that changed during the export still fails the backup.
+-   A full backup stops if any book's file is missing or no longer matches
+    its stored checksum, and lists those books with an offer to create a
+    library-only backup instead. Partial full backups are not supported.
+-   Saving uses the system Save dialog (`ACTION_CREATE_DOCUMENT`) through a
+    small channel in `MainActivity`; the app gets access to the chosen
+    file only and needs no permission. A failed write removes the partial
+    file where the provider allows it.
+-   The archive verifier (`verifyBackupArchive`) is the same one restore
+    will use: limits, entry types, paths, duplicates, manifest structure,
+    and size and SHA-256 of every entry. Dataset contents are parsed in
+    Milestone 6b.
+
+Verified on the Android phone (8 Nov 2026): a full backup (2 books,
+9.5 MB, about 5 s) and a library-only backup (7.9 KB) saved to Downloads
+through the Save dialog with the `.readerbackup` name kept. Both pulled
+files passed `verifyBackupArchive`, with the expected entries, counts and
+allowlisted settings, and the staging area was empty afterwards.
+
+Known limitations:
+
+-   A backup that is being created cannot be cancelled except at the Save
+    dialog.
+-   If Android recreates the activity while the Save dialog is open, that
+    backup is abandoned; its workspace is removed by startup staging
+    cleanup.
 
 ### 6.2 Restore
 
--   [ ] Select a backup through the system document picker.
--   [ ] Inspect archive entries before extraction.
--   [ ] Validate paths, duplicate entries, sizes, and resource limits.
--   [ ] Validate manifest and format version.
--   [ ] Verify entry sizes and SHA-256 hashes.
--   [ ] Parse and validate all JSON datasets.
--   [ ] Validate relationships and referenced book IDs.
--   [ ] Stage publication files in app-private storage.
--   [ ] Show a restore preview.
--   [ ] Implement conservative merge conflict behavior.
--   [ ] Implement replace mode only if safe recovery is complete;
-    otherwise defer it.
--   [ ] Commit database and file changes using a recoverable workflow.
--   [ ] Recover or roll back interrupted restore operations.
--   [ ] Clean up staging files.
+-   [x] Select a backup through the system document picker.
+-   [x] Inspect archive entries before extraction.
+-   [x] Validate paths, duplicate entries, sizes, and resource limits.
+-   [x] Validate manifest and format version.
+-   [x] Verify entry sizes and SHA-256 hashes.
+-   [x] Parse and validate all JSON datasets.
+-   [x] Validate relationships and referenced book IDs.
+-   [x] Stage publication files in app-private storage.
+-   [x] Show a restore preview.
+-   [x] Implement conservative merge conflict behavior.
+-   [x] Implement replace mode only if safe recovery is complete;
+    otherwise defer it. (Deferred: merge only.)
+-   [x] Commit database and file changes using a recoverable workflow.
+-   [x] Recover or roll back interrupted restore operations.
+-   [x] Clean up staging files.
+
+Implementation notes (Milestone 6b):
+
+-   Settings > Data > Restore backup. The file is checked (archive,
+    checksums, datasets, references) before anything changes, then a
+    preview shows the backup type and date, what will be added, books
+    already present, conflicts that will be skipped, and, for a
+    library-only backup, that its books will show "File missing".
+-   Merge rules (BACKUP_FORMAT.md §8.3, conservative): a book with the
+    same id and file is kept and its new bookmarks, highlights and
+    collection memberships are added; a book with the same id but a
+    different file, or the same file under another id, is skipped and
+    named. Collections with the same id but another name, and bookmarks
+    or highlights whose id exists with different content, are skipped
+    and counted. A book's current reading position is always kept.
+    Nothing in the library is changed or removed.
+-   Settings from the backup are applied only if the user ticks "Apply
+    settings from the backup" (default off), and only allowlisted, valid
+    values.
+-   Commit: each new book's files are extracted into its own staging area
+    and hashed again while written; a journal (`restore-journal.json`)
+    lists those books; their directories are moved into `books/`, checked,
+    and then every record is inserted in one transaction. A failure
+    removes the moved directories. At startup, a leftover journal means
+    the app stopped mid-commit: directories of books without a record
+    are removed, so the library is as before or fully restored.
+-   Relink: importing a file whose checksum matches a book with a missing
+    file puts the file back for that book (and extracts a cover if it has
+    none), keeping its reading data. The import reports "Restored the
+    file for 1 book."
+
+Verified on the Android phone (8 Nov 2026): choosing the full and the
+library-only backups made in 6a passed every check (full: 0.6 s) and
+showed "Nothing to restore", since both books were already in the
+library; the library, staging area and journal were unchanged. After
+removing the PDF book, restoring the full backup added it back with its
+bookmark and reading position (inspect 0.2 s, restore 0.2 s): the file's
+SHA-256 matched its record, the other book's highlight and progress were
+untouched, and the staging area was empty with no journal left. A
+library-only restore followed by a relinking import has not yet been run
+on the phone.
+
+Known limitations:
+
+-   Replace mode is not offered.
+-   The document picker copies the backup into the app cache before it is
+    read, so a full restore temporarily needs space for the backup, its
+    extracted books and the library.
+-   Conflicting books cannot yet be imported as separate copies from the
+    restore preview.
+-   A restore cannot be cancelled once it has started.
 
 ### 6.3 Cross-platform verification
 

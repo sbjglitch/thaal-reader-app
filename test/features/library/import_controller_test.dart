@@ -23,6 +23,9 @@ class FakePicker implements DocumentPicker {
   }
 
   @override
+  Future<ImportSource?> pickBackup() async => null;
+
+  @override
   Future<void> releaseTemporaryFiles() async => releases++;
 }
 
