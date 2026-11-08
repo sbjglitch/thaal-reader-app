@@ -152,14 +152,18 @@ class LibraryScreen extends ConsumerWidget {
     }
 
     final count = finished.imported.length;
-    if (count > 0) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            count == 1 ? 'Imported 1 book.' : 'Imported $count books.',
-          ),
-        ),
-      );
+    final relinked = finished.relinked.length;
+    final messages = [
+      if (count > 0) count == 1 ? 'Imported 1 book.' : 'Imported $count books.',
+      // Files matching books whose file was missing, e.g. after a
+      // library-only restore.
+      if (relinked > 0)
+        relinked == 1
+            ? 'Restored the file for 1 book.'
+            : 'Restored the files for $relinked books.',
+    ];
+    if (messages.isNotEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(messages.join(' '))));
     }
 
     if (finished.failures.isNotEmpty && context.mounted) {

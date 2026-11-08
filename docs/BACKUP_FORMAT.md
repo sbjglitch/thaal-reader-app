@@ -36,6 +36,14 @@ Where they differ from the illustrative examples below, the notes apply.
     1 MiB.
 -   A full backup is refused when any book's file is missing or does not
     match its stored checksum; there is no partial full backup.
+-   Restore is merge-only (replace mode is deferred) and skips and
+    reports every conflict (§8.3). Local reading positions are kept.
+    Dataset JSON deeper than 64 levels is rejected before decoding.
+-   A library-only restore stores each book at its normal managed path
+    (`books/<id>/publication.<ext>`) without a file there, which the app
+    shows as "File missing". Importing the same file later fills it in.
+-   Restore commit uses `restore-journal.json` in the library root;
+    see IMPLEMENTATION_PLAN.md §10 (Milestone 6b notes).
 
 ## 1. Purpose
 
@@ -805,22 +813,20 @@ reading position where the reader engine supports it.
 ## 13. Implementation checklist
 
 -   [x] Define backup domain models independent of Drift.
--   [ ] Define JSON serializers and strict validators. (Serializers and
-    the manifest validator are done; dataset validators come with
-    restore.)
+-   [x] Define JSON serializers and strict validators.
 -   [x] Implement manifest generation and parsing.
 -   [x] Implement safe archive path validation.
 -   [x] Implement streaming SHA-256 and file-size validation.
 -   [x] Implement full backup export.
 -   [x] Implement library-only export.
 -   [x] Implement temporary export workspace and cleanup.
--   [ ] Implement restore preview.
--   [ ] Implement merge conflict policy.
--   [ ] Implement safe replace mode or defer it.
--   [ ] Implement staged extraction and recoverable commit.
--   [ ] Implement restore-operation recovery after process termination.
+-   [x] Implement restore preview.
+-   [x] Implement merge conflict policy.
+-   [x] Implement safe replace mode or defer it. (Deferred.)
+-   [x] Implement staged extraction and recoverable commit.
+-   [x] Implement restore-operation recovery after process termination.
 -   [ ] Add cross-platform archive fixtures.
--   [ ] Add corruption, path traversal and resource-limit tests.
+-   [x] Add corruption, path traversal and resource-limit tests.
 -   [ ] Document backup compatibility policy in release notes.
 
 ## 14. MVP decisions

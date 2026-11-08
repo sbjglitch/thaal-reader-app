@@ -21,6 +21,10 @@ abstract interface class DocumentPicker {
   /// user cancels.
   Future<List<ImportSource>> pickPublications();
 
+  /// Lets the user choose one backup file. Returns null when the user
+  /// cancels.
+  Future<ImportSource?> pickBackup();
+
   /// Deletes temporary copies the picker made. Never touches the user's
   /// original documents.
   Future<void> releaseTemporaryFiles();
@@ -41,6 +45,16 @@ class FilePickerDocumentPicker implements DocumentPicker {
     return [
       for (final file in files) ImportSource(name: file.name, path: file.path),
     ];
+  }
+
+  /// Any file type: Android does not know the `.readerbackup` extension, so
+  /// a filter would hide backups. The restore validates the content.
+  @override
+  Future<ImportSource?> pickBackup() async {
+    final files = await FilePicker.pickFiles();
+    if (files.isEmpty) return null;
+    final file = files.first;
+    return ImportSource(name: file.name, path: file.path);
   }
 
   @override

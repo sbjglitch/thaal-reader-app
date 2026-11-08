@@ -7,8 +7,8 @@ the device.
 > **Status:** Milestone 6 (backup and restore). Import, the library,
 > reading EPUB and PDF books with a table of contents, saved reading
 > position, reading settings, bookmarks, EPUB highlights and notes, the
-> app theme setting, and creating full and library-only backups work.
-> Restoring a backup is not built yet. Android is the first target;
+> app theme setting, and full and library-only backup and restore work.
+> Android is the first target;
 > **iOS work is on hold**.
 
 Product scope, architecture and milestones live in [`docs/`](docs/README.md).
@@ -124,7 +124,7 @@ lib/
 │   ├── storage/           # App-private library files and staging
 │   ├── library/           # Book removal workflow
 │   ├── import/            # Document picker and import pipeline
-│   ├── backup/            # Backup format, archive writer/verifier, export
+│   ├── backup/            # Backup format, archive, export, restore
 │   └── reader/            # Reader contract + flutter_readium adapters
 │                          # (the only code that imports the plugin)
 └── features/<feature>/{application,presentation}/

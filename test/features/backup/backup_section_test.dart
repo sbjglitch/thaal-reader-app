@@ -14,8 +14,9 @@ import 'package:thaal/services/backup/backup_saver.dart';
 
 import '../../support/fixtures.dart';
 
-class _Saver implements BackupSaver {
-  _Saver({required this.isSupported});
+/// A saver that reports support; saving itself is not exercised here.
+class TestSaver implements BackupSaver {
+  TestSaver({this.isSupported = true});
 
   @override
   final bool isSupported;
@@ -57,7 +58,9 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
-          backupSaverProvider.overrideWithValue(_Saver(isSupported: supported)),
+          backupSaverProvider.overrideWithValue(
+            TestSaver(isSupported: supported),
+          ),
           backupExportServiceProvider.overrideWithValue(export),
         ],
         child: MaterialApp(theme: AppTheme.light, home: const SettingsScreen()),

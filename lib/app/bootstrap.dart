@@ -12,6 +12,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/logging/app_logger.dart';
 import '../core/widgets/app_error_state.dart';
 import '../data/database/app_database.dart';
+import '../data/repositories/drift_book_repository.dart';
+import '../data/repositories/drift_library_snapshot_repository.dart';
+import '../services/backup/backup_restore_service.dart';
 import '../services/reader/readium_setup.dart';
 import '../services/storage/library_storage.dart';
 import 'app.dart';
@@ -51,6 +54,15 @@ Future<void> bootstrap() async {
     // Drift opens lazily; run a query now so creation and migrations happen
     // here, where a failure can be reported, rather than in the first screen.
     await database.customSelect('SELECT 1').get();
+    // Finish or roll back a restore the app was stopped in the middle of,
+    // before anything reads the library.
+    await BackupRestoreService(
+      snapshots: DriftLibrarySnapshotRepository(database),
+      books: DriftBookRepository(database),
+      storage: storage,
+      applyPreferences: (_) async => 0,
+      logger: logger,
+    ).recoverInterrupted();
     preferences = await SharedPreferences.getInstance();
   } catch (error, stackTrace) {
     logger.error('bootstrap.failed', error, stackTrace: stackTrace);

@@ -43,6 +43,14 @@ final class ImportDuplicate extends ImportResult {
   final List<Book> existing;
 }
 
+/// The file matched a library book whose file is missing (for example after
+/// a library-only restore), and was put back in place for that book.
+final class ImportRelinked extends ImportResult {
+  const ImportRelinked(super.source, this.book);
+
+  final Book book;
+}
+
 final class ImportFailed extends ImportResult {
   const ImportFailed(super.source, this.reason);
 
@@ -54,7 +62,9 @@ final class ImportFailed extends ImportResult {
 ///
 /// 1. Copy the source into a private staging area (the source is only read).
 /// 2. Validate extension, size and file signature; compute SHA-256.
-/// 3. Stop with [ImportDuplicate] if the checksum is already in the library.
+/// 3. If the checksum matches a book whose file is missing, put the file
+///    back for that book ([ImportRelinked]). Otherwise stop with
+///    [ImportDuplicate] if the checksum is already in the library.
 /// 4. Read metadata and the cover through the reader engine.
 /// 5. Move files to `books/<id>/`, then insert the book record.
 ///
@@ -95,6 +105,7 @@ class ImportService {
         'outcome': switch (result) {
           ImportSucceeded() => 'imported',
           ImportDuplicate() => 'duplicate',
+          ImportRelinked() => 'relinked',
           ImportFailed(:final reason) => reason,
         },
         if (result case ImportSucceeded(:final book)) ...{
@@ -135,9 +146,17 @@ class ImportService {
       }
       final checksum = await _storage.sha256Hex(staged);
 
-      if (!allowDuplicate) {
-        final existing = await _books.findBooksByChecksum(checksum);
-        if (existing.isNotEmpty) return ImportDuplicate(source, existing);
+      final existing = await _books.findBooksByChecksum(checksum);
+      for (final book in existing) {
+        if (book.format == format && !await _storage.exists(book.filePath)) {
+          return ImportRelinked(
+            source,
+            await _relink(book, staged, area, size),
+          );
+        }
+      }
+      if (!allowDuplicate && existing.isNotEmpty) {
+        return ImportDuplicate(source, existing);
       }
 
       final PublicationDetails details;
@@ -185,6 +204,55 @@ class ImportService {
         }
       }
     }
+  }
+
+  /// Puts the staged file at [book]'s file path. A cover is extracted if the
+  /// book has none; that is best effort. The record is touched so the
+  /// library refreshes.
+  Future<Book> _relink(
+    Book book,
+    ManagedPath staged,
+    ManagedPath area,
+    int size,
+  ) async {
+    if (size != book.fileSizeBytes) {
+      throw const StorageError(StorageErrorKind.ioFailure, 'size mismatch');
+    }
+    await _storage.promote(staged, book.filePath);
+    var cover = book.coverPath;
+    if (cover == null || !await _storage.exists(cover)) {
+      try {
+        final details = await _inspector.inspect(
+          _storage.file(book.filePath).path,
+          coverDirectory: _storage.file(area).path,
+        );
+        cover = await _promoteCover(book.id, area, details);
+      } on PublicationError {
+        cover = null;
+      }
+    }
+    final relinked = Book(
+      id: book.id,
+      title: book.title,
+      authors: book.authors,
+      description: book.description,
+      language: book.language,
+      identifier: book.identifier,
+      publisher: book.publisher,
+      publishedAt: book.publishedAt,
+      format: book.format,
+      filePath: book.filePath,
+      coverPath: cover,
+      fileSizeBytes: book.fileSizeBytes,
+      fileChecksum: book.fileChecksum,
+      readingStatus: book.readingStatus,
+      addedAt: book.addedAt,
+      lastOpenedAt: book.lastOpenedAt,
+      updatedAt: _clock(),
+      metadataJson: book.metadataJson,
+    );
+    await _books.updateBookMetadata(relinked);
+    return relinked;
   }
 
   /// Moves files into place, then inserts the record. Undoes the move if

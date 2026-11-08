@@ -23,6 +23,7 @@ import '../domain/repositories/reading_progress_repository.dart';
 import '../domain/services/publication_inspector.dart';
 import '../services/backup/backup_export_service.dart';
 import '../services/backup/backup_format.dart';
+import '../services/backup/backup_restore_service.dart';
 import '../services/backup/backup_saver.dart';
 import '../services/import/document_picker.dart';
 import '../services/import/import_service.dart';
@@ -149,6 +150,17 @@ final backupExportServiceProvider = Provider<BackupExportService>((ref) {
       );
     },
     readPreferences: () => BackupPreferences.read(prefs),
+    logger: ref.watch(appLoggerProvider),
+  );
+});
+
+final backupRestoreServiceProvider = Provider<BackupRestoreService>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+  return BackupRestoreService(
+    snapshots: ref.watch(librarySnapshotRepositoryProvider),
+    books: ref.watch(bookRepositoryProvider),
+    storage: ref.watch(libraryStorageProvider),
+    applyPreferences: prefs.applyBackupPreferences,
     logger: ref.watch(appLoggerProvider),
   );
 });

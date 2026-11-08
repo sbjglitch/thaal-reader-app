@@ -6,6 +6,7 @@ import '../../../domain/entities/book.dart';
 import '../../../services/backup/backup_export_service.dart';
 import '../../../services/backup/backup_format.dart';
 import '../application/backup_controller.dart';
+import 'restore_flow.dart';
 
 /// The backup actions in Settings (UI/UX §7.10–7.11).
 class BackupSection extends ConsumerWidget {
@@ -13,7 +14,7 @@ class BackupSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final busy = ref.watch(backupControllerProvider) is BackupCreating;
+    final busy = ref.watch(backupControllerProvider).isBusy;
     return Column(
       children: [
         ListTile(
@@ -29,6 +30,13 @@ class BackupSection extends ConsumerWidget {
           subtitle: const Text('Reading data and settings, without book files'),
           enabled: !busy,
           onTap: () => _start(context, ref, BackupType.libraryOnly),
+        ),
+        ListTile(
+          leading: const Icon(Icons.settings_backup_restore),
+          title: const Text('Restore backup'),
+          subtitle: const Text('Add books and reading data from a backup'),
+          enabled: !busy,
+          onTap: () => startRestore(context, ref),
         ),
       ],
     );
@@ -58,7 +66,7 @@ class BackupSection extends ConsumerWidget {
     final progress = DialogRoute<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const _CreatingDialog(),
+      builder: (_) => const BackupProgressDialog('Creating backup…'),
     );
     navigator.push(progress).ignore();
     final BackupExportResult? result;
@@ -159,8 +167,11 @@ class _ConfirmBackupDialogState extends State<_ConfirmBackupDialog> {
   }
 }
 
-class _CreatingDialog extends StatelessWidget {
-  const _CreatingDialog();
+/// A blocking progress dialog for backup and restore steps.
+class BackupProgressDialog extends StatelessWidget {
+  const BackupProgressDialog(this.label, {super.key});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -169,14 +180,14 @@ class _CreatingDialog extends StatelessWidget {
       child: AlertDialog(
         content: Semantics(
           liveRegion: true,
-          child: const Row(
+          child: Row(
             children: [
-              SizedBox.square(
+              const SizedBox.square(
                 dimension: 24,
                 child: CircularProgressIndicator(strokeWidth: 3),
               ),
-              SizedBox(width: AppSpacing.space16),
-              Expanded(child: Text('Creating backup…')),
+              const SizedBox(width: AppSpacing.space16),
+              Expanded(child: Text(label)),
             ],
           ),
         ),

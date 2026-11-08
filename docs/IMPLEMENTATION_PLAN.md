@@ -647,21 +647,72 @@ Known limitations:
 
 ### 6.2 Restore
 
--   [ ] Select a backup through the system document picker.
--   [ ] Inspect archive entries before extraction.
--   [ ] Validate paths, duplicate entries, sizes, and resource limits.
--   [ ] Validate manifest and format version.
--   [ ] Verify entry sizes and SHA-256 hashes.
--   [ ] Parse and validate all JSON datasets.
--   [ ] Validate relationships and referenced book IDs.
--   [ ] Stage publication files in app-private storage.
--   [ ] Show a restore preview.
--   [ ] Implement conservative merge conflict behavior.
--   [ ] Implement replace mode only if safe recovery is complete;
-    otherwise defer it.
--   [ ] Commit database and file changes using a recoverable workflow.
--   [ ] Recover or roll back interrupted restore operations.
--   [ ] Clean up staging files.
+-   [x] Select a backup through the system document picker.
+-   [x] Inspect archive entries before extraction.
+-   [x] Validate paths, duplicate entries, sizes, and resource limits.
+-   [x] Validate manifest and format version.
+-   [x] Verify entry sizes and SHA-256 hashes.
+-   [x] Parse and validate all JSON datasets.
+-   [x] Validate relationships and referenced book IDs.
+-   [x] Stage publication files in app-private storage.
+-   [x] Show a restore preview.
+-   [x] Implement conservative merge conflict behavior.
+-   [x] Implement replace mode only if safe recovery is complete;
+    otherwise defer it. (Deferred: merge only.)
+-   [x] Commit database and file changes using a recoverable workflow.
+-   [x] Recover or roll back interrupted restore operations.
+-   [x] Clean up staging files.
+
+Implementation notes (Milestone 6b):
+
+-   Settings > Data > Restore backup. The file is checked (archive,
+    checksums, datasets, references) before anything changes, then a
+    preview shows the backup type and date, what will be added, books
+    already present, conflicts that will be skipped, and, for a
+    library-only backup, that its books will show "File missing".
+-   Merge rules (BACKUP_FORMAT.md §8.3, conservative): a book with the
+    same id and file is kept and its new bookmarks, highlights and
+    collection memberships are added; a book with the same id but a
+    different file, or the same file under another id, is skipped and
+    named. Collections with the same id but another name, and bookmarks
+    or highlights whose id exists with different content, are skipped
+    and counted. A book's current reading position is always kept.
+    Nothing in the library is changed or removed.
+-   Settings from the backup are applied only if the user ticks "Apply
+    settings from the backup" (default off), and only allowlisted, valid
+    values.
+-   Commit: each new book's files are extracted into its own staging area
+    and hashed again while written; a journal (`restore-journal.json`)
+    lists those books; their directories are moved into `books/`, checked,
+    and then every record is inserted in one transaction. A failure
+    removes the moved directories. At startup, a leftover journal means
+    the app stopped mid-commit: directories of books without a record
+    are removed, so the library is as before or fully restored.
+-   Relink: importing a file whose checksum matches a book with a missing
+    file puts the file back for that book (and extracts a cover if it has
+    none), keeping its reading data. The import reports "Restored the
+    file for 1 book."
+
+Verified on the Android phone (8 Nov 2026): choosing the full and the
+library-only backups made in 6a passed every check (full: 0.6 s) and
+showed "Nothing to restore", since both books were already in the
+library; the library, staging area and journal were unchanged. After
+removing the PDF book, restoring the full backup added it back with its
+bookmark and reading position (inspect 0.2 s, restore 0.2 s): the file's
+SHA-256 matched its record, the other book's highlight and progress were
+untouched, and the staging area was empty with no journal left. A
+library-only restore followed by a relinking import has not yet been run
+on the phone.
+
+Known limitations:
+
+-   Replace mode is not offered.
+-   The document picker copies the backup into the app cache before it is
+    read, so a full restore temporarily needs space for the backup, its
+    extracted books and the library.
+-   Conflicting books cannot yet be imported as separate copies from the
+    restore preview.
+-   A restore cannot be cancelled once it has started.
 
 ### 6.3 Cross-platform verification
 

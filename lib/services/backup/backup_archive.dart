@@ -158,6 +158,108 @@ BackupManifest verifyBackupArchive(
   }
 }
 
+/// Verifies [archivePath] and returns its manifest with the bytes of every
+/// dataset entry (each already checked against the manifest and bounded by
+/// [BackupLimits.maxDataEntryBytes]).
+({BackupManifest manifest, Map<String, List<int>> datasets}) loadBackupData(
+  String archivePath, {
+  BackupLimits limits = const BackupLimits(),
+}) {
+  final manifest = verifyBackupArchive(archivePath, limits: limits);
+  final wanted = {
+    for (final entry in manifest.entries)
+      if (entry.role == BackupEntryRole.data) entry.path,
+  };
+  final datasets = <String, List<int>>{};
+  _withHeaders(archivePath, (headers) {
+    for (final header in headers) {
+      if (wanted.contains(header.filename)) {
+        datasets[header.filename] = _readBytes(header);
+      }
+    }
+  });
+  return (manifest: manifest, datasets: datasets);
+}
+
+/// One entry to extract to [destinationPath], which must not exist yet.
+final class ExtractRequest {
+  const ExtractRequest({required this.entry, required this.destinationPath});
+
+  final BackupEntry entry;
+  final String destinationPath;
+}
+
+/// Extracts the requested entries, hashing the bytes as they are written,
+/// and fails with [BackupErrorKind.checksumMismatch] if any differs from
+/// the manifest. Destination paths are chosen by the caller, never taken
+/// from the archive. A failed entry's partial file is deleted; earlier
+/// entries are left for the caller's staging cleanup.
+void extractBackupEntries(String archivePath, List<ExtractRequest> requests) {
+  _withHeaders(archivePath, (headers) {
+    final byName = {for (final header in headers) header.filename: header};
+    for (final request in requests) {
+      final header = byName[request.entry.path];
+      if (header == null) {
+        throw const BackupError(
+          BackupErrorKind.invalidArchive,
+          'entry to extract is missing',
+        );
+      }
+      final file = File(request.destinationPath);
+      file.parent.createSync(recursive: true);
+      final handle = file.openSync(mode: FileMode.writeOnly);
+      final digest = _DigestSink();
+      final hasher = sha256.startChunkedConversion(digest);
+      final output = SinkOutputStream(_FileSink(handle))..watch = hasher.add;
+      var complete = false;
+      try {
+        try {
+          header.file!
+            ..verify = true
+            ..throwOnError = true
+            ..decompress(output);
+          output.flush();
+        } on FormatException {
+          throw const BackupError(
+            BackupErrorKind.checksumMismatch,
+            'entry data is corrupt',
+          );
+        }
+        hasher.close();
+        if (output.length != request.entry.sizeBytes ||
+            digest.value.toString() != request.entry.sha256) {
+          throw const BackupError(
+            BackupErrorKind.checksumMismatch,
+            'extracted entry does not match the manifest',
+          );
+        }
+        complete = true;
+      } finally {
+        handle.closeSync();
+        if (!complete && file.existsSync()) file.deleteSync();
+      }
+    }
+  });
+}
+
+void _withHeaders(
+  String archivePath,
+  void Function(List<ZipFileHeader> headers) body,
+) {
+  final input = InputFileStream(archivePath);
+  try {
+    final decoder = ZipDecoder();
+    try {
+      decoder.decodeStream(input, throwOnError: true);
+    } on FormatException {
+      throw const BackupError(BackupErrorKind.invalidArchive, 'not a zip');
+    }
+    body(decoder.directory.fileHeaders);
+  } finally {
+    input.closeSync();
+  }
+}
+
 const int _chunkBytes = 1 << 20;
 const int _ratioCheckMinBytes = 1 << 20;
 const int _unixFileTypeMask = 0xF000;
@@ -234,7 +336,7 @@ FileDigest _digestEntry(ZipFileHeader header) {
   return FileDigest(sizeBytes: output.length, sha256: digest.value.toString());
 }
 
-Object? _readJson(ZipFileHeader header) {
+List<int> _readBytes(ZipFileHeader header) {
   final collected = BytesBuilder(copy: false);
   final output = SinkOutputStream(_BytesSink(collected));
   try {
@@ -245,12 +347,16 @@ Object? _readJson(ZipFileHeader header) {
     output.flush();
   } on FormatException {
     throw const BackupError(
-      BackupErrorKind.invalidArchive,
-      'manifest data is corrupt',
+      BackupErrorKind.checksumMismatch,
+      'entry data is corrupt',
     );
   }
+  return collected.takeBytes();
+}
+
+Object? _readJson(ZipFileHeader header) {
   try {
-    return jsonDecode(utf8.decode(collected.takeBytes()));
+    return jsonDecode(utf8.decode(_readBytes(header)));
   } on FormatException {
     throw const BackupError(
       BackupErrorKind.invalidArchive,
@@ -278,6 +384,18 @@ final class _BytesSink implements Sink<List<int>> {
 
   @override
   void add(List<int> data) => _builder.add(data);
+
+  @override
+  void close() {}
+}
+
+final class _FileSink implements Sink<List<int>> {
+  _FileSink(this._file);
+
+  final RandomAccessFile _file;
+
+  @override
+  void add(List<int> data) => _file.writeFromSync(data);
 
   @override
   void close() {}

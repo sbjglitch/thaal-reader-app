@@ -59,4 +59,92 @@ class DriftLibrarySnapshotRepository implements LibrarySnapshotRepository {
       );
     });
   });
+
+  @override
+  Future<void> insertRecords(LibrarySnapshot records) =>
+      guardDatabase('insertRecords', () {
+        return _db.transaction(() async {
+          await _db.batch((batch) {
+            batch
+              ..insertAll(_db.books, [
+                for (final book in records.books)
+                  BooksCompanion.insert(
+                    id: book.id,
+                    title: book.title,
+                    authorsJson: Value(book.authors),
+                    description: Value(book.description),
+                    language: Value(book.language),
+                    identifier: Value(book.identifier),
+                    publisher: Value(book.publisher),
+                    publishedAt: Value(book.publishedAt),
+                    format: book.format,
+                    filePath: book.filePath.value,
+                    coverPath: Value(book.coverPath?.value),
+                    fileSizeBytes: book.fileSizeBytes,
+                    fileChecksum: book.fileChecksum,
+                    readingStatus: Value(book.readingStatus),
+                    addedAt: toEpochMillis(book.addedAt),
+                    lastOpenedAt: Value(
+                      book.lastOpenedAt == null
+                          ? null
+                          : toEpochMillis(book.lastOpenedAt!),
+                    ),
+                    updatedAt: toEpochMillis(book.updatedAt),
+                    metadataJson: Value(book.metadataJson),
+                  ),
+              ])
+              ..insertAll(_db.readingProgressEntries, [
+                for (final progress in records.progress)
+                  ReadingProgressEntriesCompanion.insert(
+                    bookId: progress.bookId,
+                    locatorJson: Value(progress.locator?.json),
+                    pageNumber: Value(progress.pageNumber),
+                    progression: Value(progress.progression),
+                    updatedAt: toEpochMillis(progress.updatedAt),
+                  ),
+              ])
+              ..insertAll(_db.bookmarks, [
+                for (final bookmark in records.bookmarks)
+                  BookmarksCompanion.insert(
+                    id: bookmark.id,
+                    bookId: bookmark.bookId,
+                    locatorJson: bookmark.locator.json,
+                    label: Value(bookmark.label),
+                    createdAt: toEpochMillis(bookmark.createdAt),
+                    updatedAt: toEpochMillis(bookmark.updatedAt),
+                  ),
+              ])
+              ..insertAll(_db.highlights, [
+                for (final highlight in records.highlights)
+                  HighlightsCompanion.insert(
+                    id: highlight.id,
+                    bookId: highlight.bookId,
+                    locatorJson: highlight.locator.json,
+                    selectedText: Value(highlight.selectedText),
+                    color: highlight.color,
+                    note: Value(highlight.note),
+                    createdAt: toEpochMillis(highlight.createdAt),
+                    updatedAt: toEpochMillis(highlight.updatedAt),
+                  ),
+              ])
+              ..insertAll(_db.collections, [
+                for (final collection in records.collections)
+                  CollectionsCompanion.insert(
+                    id: collection.id,
+                    name: collection.name,
+                    createdAt: toEpochMillis(collection.createdAt),
+                    updatedAt: toEpochMillis(collection.updatedAt),
+                  ),
+              ])
+              ..insertAll(_db.collectionBooks, [
+                for (final membership in records.memberships)
+                  CollectionBooksCompanion.insert(
+                    collectionId: membership.collectionId,
+                    bookId: membership.bookId,
+                    addedAt: toEpochMillis(membership.addedAt),
+                  ),
+              ]);
+          });
+        });
+      });
 }
