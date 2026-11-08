@@ -7,6 +7,7 @@ import '../features/bookmarks/presentation/bookmarks_screen.dart';
 import '../features/collections/presentation/collections_screen.dart';
 import '../features/library/presentation/book_details_screen.dart';
 import '../features/library/presentation/library_screen.dart';
+import '../features/reader/application/reader_controller.dart';
 import '../features/reader/presentation/reader_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import 'app_shell.dart';
@@ -25,8 +26,11 @@ abstract final class AppRoutes {
   /// Full-screen reader, outside the bottom-navigation shell (UI/UX §6.1).
   static const reader = (name: 'reader', path: '/reader/:bookId');
 
-  static String readerLocation(String bookId) =>
-      '/reader/${Uri.encodeComponent(bookId)}';
+  /// Opens [bookId] at its saved position, or at [bookmarkId] when given.
+  static String readerLocation(String bookId, {String? bookmarkId}) => Uri(
+    path: '/reader/$bookId',
+    queryParameters: bookmarkId == null ? null : {'bookmark': bookmarkId},
+  ).toString();
 
   static String bookDetailsLocation(String bookId) =>
       '${library.path}/books/${Uri.encodeComponent(bookId)}';
@@ -41,8 +45,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         name: AppRoutes.reader.name,
         path: AppRoutes.reader.path,
-        builder: (context, state) =>
-            ReaderScreen(bookId: state.pathParameters['bookId']!),
+        builder: (context, state) => ReaderScreen(
+          request: ReaderRequest(
+            state.pathParameters['bookId']!,
+            bookmarkId: state.uri.queryParameters['bookmark'],
+          ),
+        ),
       ),
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(navigationShell: shell),

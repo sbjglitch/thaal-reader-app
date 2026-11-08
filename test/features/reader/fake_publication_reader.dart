@@ -20,6 +20,10 @@ class FakePublicationReader implements PublicationReader {
   final applied = <ReaderAppearance>[];
   final visited = <LocatorEnvelope>[];
   bool acceptAppearance = true;
+  PublicationFormat? _format;
+
+  /// Every set passed to [showHighlights], latest last.
+  final shownHighlights = <List<ReaderHighlight>>[];
 
   void emit(ReaderEvent event) => controller.add(event);
 
@@ -36,6 +40,7 @@ class FakePublicationReader implements PublicationReader {
     required ReaderAppearance appearance,
   }) async {
     calls.add('open');
+    _format = format;
     openedPath = filePath;
     openedWith = appearance;
     if (openFailure case final failure?) throw failure;
@@ -84,5 +89,14 @@ class FakePublicationReader implements PublicationReader {
   Future<void> close() async {
     calls.add('close');
     _open = false;
+  }
+
+  @override
+  bool get supportsHighlights => _open && _format == PublicationFormat.epub;
+
+  @override
+  Future<bool> showHighlights(List<ReaderHighlight> highlights) async {
+    shownHighlights.add(highlights);
+    return true;
   }
 }

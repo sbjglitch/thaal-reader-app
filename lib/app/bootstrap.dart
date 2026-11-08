@@ -108,6 +108,9 @@ void installErrorHandlers(AppLogger logger) {
       'flutter.framework_error',
       details.exception,
       stackTrace: details.stack,
+      // Framework-provided labels such as "image resource service"; they
+      // never contain user content.
+      fields: {'library': details.library, 'silent': details.silent},
     );
     // Developer builds keep Flutter's full diagnostic output.
     if (kDebugMode) FlutterError.presentError(details);

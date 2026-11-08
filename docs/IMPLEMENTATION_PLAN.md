@@ -457,27 +457,81 @@ and "finished" when the engine reports the end of the publication.
 
 ### 5.1 Bookmarks
 
--   [ ] Create a bookmark at the current reader location.
--   [ ] Save the serialized locator.
--   [ ] List bookmarks for a book.
--   [ ] Navigate to a selected bookmark.
--   [ ] Rename or edit a bookmark label.
--   [ ] Delete a bookmark.
--   [ ] Restore bookmarks after app restart.
+-   [x] Create a bookmark at the current reader location.
+-   [x] Save the serialized locator.
+-   [x] List bookmarks for a book.
+-   [x] Navigate to a selected bookmark.
+-   [x] Rename or edit a bookmark label.
+-   [x] Delete a bookmark.
+-   [x] Restore bookmarks after app restart.
+
+Implementation notes (Milestone 5a):
+
+-   The reader's top bar has a bookmark toggle and a Bookmarks button.
+    The toggle is filled when a bookmark matches the current position
+    (same chapter and progression within 0.001 for EPUB; same page for
+    PDF). Tapping it there removes that bookmark, with undo.
+-   The in-reader list shows the open book's bookmarks oldest first;
+    choosing one moves the reader there after saving the current
+    position. A bookmark whose location cannot be found is kept and the
+    reader explains.
+-   The Bookmarks tab lists every bookmark newest first. Opening one
+    opens the reader at it (`/reader/<bookId>?bookmark=<id>`), or the
+    book's details when its file is missing. Rename (blank clears the
+    label, 100 characters at most) and delete with undo are on each
+    row's menu.
+-   Undo re-inserts the deleted record with its original id and dates.
+-   Persistence across restarts comes from the database; it is covered
+    by tests but still needs a check on the phone.
 
 ### 5.2 EPUB highlights and notes
 
--   [ ] Validate highlight creation through the reader engine.
--   [ ] Capture the selected text and locator where available.
--   [ ] Apply an app-owned highlight color.
--   [ ] Persist the highlight record.
--   [ ] Reapply saved highlights when reopening a publication.
--   [ ] Add and edit a note.
--   [ ] List highlights and notes for a book.
--   [ ] Navigate from a highlight list item to its location.
--   [ ] Delete a highlight.
--   [ ] Handle stale or unresolvable locators without deleting user
+-   [x] Validate highlight creation through the reader engine.
+-   [x] Capture the selected text and locator where available.
+-   [x] Apply an app-owned highlight color.
+-   [x] Persist the highlight record.
+-   [x] Reapply saved highlights when reopening a publication.
+-   [x] Add and edit a note.
+-   [x] List highlights and notes for a book.
+-   [x] Navigate from a highlight list item to its location.
+-   [x] Delete a highlight.
+-   [x] Handle stale or unresolvable locators without deleting user
     notes.
+
+Implementation notes (Milestone 5b):
+
+-   Selecting text in an EPUB adds **Highlight** and **Note** to the
+    system text menu. Highlight saves a yellow highlight; Note saves one
+    and opens the editor. PDFs show no highlight controls.
+-   Tapping a highlight opens the editor: the saved passage, colour
+    (yellow, green, blue, pink; each named and marked with a check, not
+    by colour alone), a note of up to 5,000 characters, Copy text, and
+    Delete with undo. Save errors show inside the sheet.
+-   The reader's Highlights button lists the book's highlights oldest
+    first with note previews; choosing one moves there after saving the
+    current position. A location that cannot be found keeps the
+    highlight and explains.
+-   Highlights are kept in the app schema and rebuilt as plugin
+    decorations on every change and when the reader becomes ready (spike
+    finding 12). Ones whose locator cannot be read are listed but not
+    drawn.
+-   The tints are defined in `lib/app/theme/highlight_colors.dart`; the
+    UI spec gives no values for them.
+-   Snack bars from inside the bookmark and highlight lists now appear in
+    the sheet, so Undo can be tapped there.
+
+Verified on the Android phone (8 Nov 2026): creating a highlight and a
+note, editing, deleting with undo, and redrawing after reopening.
+
+Known limitations:
+
+-   The engine does not clear the text selection after Highlight or Note
+    (spike finding 13); there is no API for it in 0.9.0. Tapping
+    elsewhere clears it.
+-   A passage repeated with identical surrounding text is anchored at its
+    first occurrence (spike finding 11).
+-   The library-wide highlights list (PRD FR-ANNOT-03, UI spec §7.9,
+    P2) is not built; where it lives in the navigation is undecided.
 
 PDF text highlighting remains out of scope unless the technical spike
 establishes a stable, low-risk implementation and the PRD is updated.

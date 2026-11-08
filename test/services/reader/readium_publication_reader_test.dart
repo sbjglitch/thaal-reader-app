@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' show Color, Colors;
 import 'package:flutter_readium/flutter_readium.dart' hide PublicationFormat;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:thaal/app/theme/highlight_colors.dart';
 import 'package:thaal/domain/entities/enums.dart';
 import 'package:thaal/domain/entities/locator_envelope.dart';
 import 'package:thaal/domain/entities/reader_preferences.dart';
@@ -162,6 +163,126 @@ void main() {
       );
       expect(defaults.layout, PDFLayout.paginated);
       expect(defaults.fit, PDFFit.width);
+    });
+  });
+
+  group('ReadiumLocatorInterpreter', () {
+    const interpreter = ReadiumLocatorInterpreter();
+
+    LocatorEnvelope epub(String href, double? progression) => LocatorEnvelope(
+      format: PublicationFormat.epub,
+      locator: Locator(
+        href: href,
+        type: 'application/xhtml+xml',
+        title: 'Chapter',
+        locations: Locations(progression: progression),
+      ).toJson(),
+    );
+
+    LocatorEnvelope pdf(int page) => LocatorEnvelope(
+      format: PublicationFormat.pdf,
+      locator: Locator(
+        href: 'publication.pdf',
+        type: 'application/pdf',
+        locations: Locations(position: page, progression: page / 100),
+      ).toJson(),
+    );
+
+    test('describes a stored locator like a live position', () {
+      final described = interpreter.describe(pdf(12));
+      expect(described.pageNumber, 12);
+      expect(interpreter.describe(epub('c1', 0.3)).chapterTitle, 'Chapter');
+    });
+
+    test('EPUB locations match by chapter and nearby progression', () {
+      expect(
+        interpreter.isSameLocation(epub('c1', 0.3), epub('c1', 0.3005)),
+        isTrue,
+      );
+      expect(
+        interpreter.isSameLocation(epub('c1', 0.3), epub('c1', 0.35)),
+        isFalse,
+      );
+      expect(
+        interpreter.isSameLocation(epub('c1', 0.3), epub('c2', 0.3)),
+        isFalse,
+      );
+      expect(
+        interpreter.isSameLocation(epub('c1', null), epub('c1', null)),
+        isTrue,
+      );
+    });
+
+    test('PDF locations match by page', () {
+      expect(interpreter.isSameLocation(pdf(4), pdf(4)), isTrue);
+      expect(interpreter.isSameLocation(pdf(4), pdf(5)), isFalse);
+      expect(
+        interpreter.isSameLocation(pdf(4), epub('publication.pdf', 0.04)),
+        isFalse,
+      );
+    });
+
+    test('an undecodable locator never matches', () {
+      const broken = LocatorEnvelope(
+        format: PublicationFormat.epub,
+        locator: {'nothing': true},
+      );
+      expect(interpreter.isSameLocation(broken, broken), isFalse);
+    });
+  });
+
+  group('highlights', () {
+    test('maps selection actions by id', () {
+      expect(
+        ReadiumPublicationReader.textActionFor('thaal_highlight'),
+        ReaderTextAction.highlight,
+      );
+      expect(
+        ReadiumPublicationReader.textActionFor('thaal_note'),
+        ReaderTextAction.note,
+      );
+      expect(ReadiumPublicationReader.textActionFor('copy'), isNull);
+    });
+
+    test('builds decorations from app records and skips unreadable ones', () {
+      const locator = Locator(
+        href: 'c1.xhtml',
+        type: 'application/xhtml+xml',
+        locations: Locations(progression: 0.2),
+        text: LocatorText(highlight: 'word'),
+      );
+      final decorations = ReadiumPublicationReader.decorationsFrom([
+        ReaderHighlight(
+          id: 'hl-1',
+          locator: LocatorEnvelope(
+            format: PublicationFormat.epub,
+            locator: locator.toJson(),
+          ),
+          color: HighlightColor.green,
+        ),
+        const ReaderHighlight(
+          id: 'broken',
+          locator: LocatorEnvelope(
+            format: PublicationFormat.epub,
+            locator: {'nothing': true},
+          ),
+          color: HighlightColor.yellow,
+        ),
+      ]);
+
+      final decoration = decorations.single;
+      expect(decoration.id, 'hl-1');
+      expect(decoration.locator.toJson(), locator.toJson());
+      expect(decoration.style.style, DecorationStyle.highlight);
+      expect(decoration.style.tint, HighlightColor.green.tint);
+    });
+
+    test('every app colour has a distinct tint and a name', () {
+      final tints = {for (final c in HighlightColor.values) c.tint};
+      expect(tints, hasLength(HighlightColor.values.length));
+      for (final color in HighlightColor.values) {
+        expect(color.label, isNotEmpty);
+      }
     });
   });
 }

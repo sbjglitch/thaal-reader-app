@@ -126,12 +126,61 @@ final class ReaderReachedEnd extends ReaderEvent {
   const ReaderReachedEnd();
 }
 
+/// Actions the reader offers on selected text where highlights are
+/// supported (EPUB only; spec §11).
+enum ReaderTextAction { highlight, note }
+
+/// The user chose a [ReaderTextAction] on selected text. [locator] anchors
+/// the selection; [selectedText] is user content and must never be logged.
+final class ReaderTextActionEvent extends ReaderEvent {
+  const ReaderTextActionEvent({
+    required this.action,
+    required this.locator,
+    this.selectedText,
+  });
+
+  final ReaderTextAction action;
+  final LocatorEnvelope locator;
+  final String? selectedText;
+}
+
+/// The user tapped a highlight shown with [PublicationReader.showHighlights].
+final class ReaderHighlightTapped extends ReaderEvent {
+  const ReaderHighlightTapped(this.highlightId);
+
+  final String highlightId;
+}
+
+/// A saved highlight to draw over the publication.
+final class ReaderHighlight {
+  const ReaderHighlight({
+    required this.id,
+    required this.locator,
+    required this.color,
+  });
+
+  final String id;
+  final LocatorEnvelope locator;
+  final HighlightColor color;
+}
+
 /// An error reported while reading. [fatal] errors leave the reader unusable.
 final class ReaderErrorEvent extends ReaderEvent {
   const ReaderErrorEvent(this.failure, {required this.fatal});
 
   final ReaderFailure failure;
   final bool fatal;
+}
+
+/// Reads display details out of stored locators without an open
+/// publication, so lists of saved locations can show a chapter or page.
+abstract interface class LocatorInterpreter {
+  /// Chapter, page and progression stored in [locator].
+  ReaderPosition describe(LocatorEnvelope locator);
+
+  /// Whether [a] and [b] point at the same place, tolerating the small
+  /// differences the engine reports for one location.
+  bool isSameLocation(LocatorEnvelope a, LocatorEnvelope b);
 }
 
 /// Opens, renders and navigates one publication at a time
@@ -175,6 +224,15 @@ abstract interface class PublicationReader {
 
   /// Returns false when the location cannot be found.
   Future<bool> goToLocator(LocatorEnvelope locator);
+
+  /// Whether the open publication supports text highlights. False for PDF
+  /// and when nothing is open; callers hide highlight controls then.
+  bool get supportsHighlights;
+
+  /// Replaces every highlight drawn over the open publication. Highlights
+  /// whose locator the engine cannot read are skipped, not deleted.
+  /// Returns false when they could not be applied.
+  Future<bool> showHighlights(List<ReaderHighlight> highlights);
 
   /// Releases the publication. Safe to call when nothing is open.
   Future<void> close();

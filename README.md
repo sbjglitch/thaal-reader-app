@@ -4,10 +4,11 @@ An offline-first EPUB and PDF reader for Android and iOS, built with Flutter.
 No accounts, no backend, no network: publications and reading data stay on
 the device.
 
-> **Status:** Milestone 4 (reader). Import, the library, and reading EPUB
-> and PDF books with a table of contents, saved reading position and reading
-> settings work. Bookmarks, highlights (Milestone 5) and backup are not
-> built yet. Android is the first target;
+> **Status:** Milestone 5 (bookmarks, highlights). Import, the library,
+> reading EPUB and PDF books with a table of contents, saved reading
+> position, reading settings, bookmarks, and EPUB highlights and notes
+> work. The app theme setting and backup are not built yet. Android is the
+> first target;
 > **iOS work is on hold**.
 
 Product scope, architecture and milestones live in [`docs/`](docs/README.md).

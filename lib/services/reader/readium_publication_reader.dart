@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_readium/flutter_readium.dart' hide PublicationFormat;
 
+import '../../app/theme/highlight_colors.dart';
 import '../../domain/entities/enums.dart';
 import '../../domain/entities/locator_envelope.dart';
 import '../../domain/entities/reader_preferences.dart';
@@ -161,8 +162,36 @@ class ReadiumPublicationReader implements PublicationReader {
     if (publication == null) {
       throw StateError('buildView called without an open publication');
     }
+    final generation = _generation;
+    bool current() => generation == _generation;
+    final highlights = supportsHighlights;
     return ReadiumReaderWidget(
       publication: publication,
+      selectionActions: highlights ? _textActions : const [],
+      onSelectionAction: highlights
+          ? (event) {
+              final action = textActionFor(event.actionId);
+              if (!current() || action == null) return;
+              _events.add(
+                ReaderTextActionEvent(
+                  action: action,
+                  locator: LocatorEnvelope(
+                    format: PublicationFormat.epub,
+                    locator: event.locator.toJson(),
+                  ),
+                  selectedText:
+                      event.selectedText ?? event.locator.text?.highlight,
+                ),
+              );
+            }
+          : null,
+      onDecorationInteraction: highlights
+          ? (event) {
+              if (!current() || event.group != _highlightGroup) return;
+              if (event.type != DecorationInteractionType.tap) return;
+              _events.add(ReaderHighlightTapped(event.decorationId));
+            }
+          : null,
       initialLocator: initialLocator == null
           ? null
           : Locator.fromJson(initialLocator.locator),
@@ -228,6 +257,54 @@ class ReadiumPublicationReader implements PublicationReader {
       return false;
     }
   }
+
+  static const _highlightGroup = 'thaal_highlights';
+  static const _textActions = [
+    SelectionAction(id: 'thaal_highlight', title: 'Highlight'),
+    SelectionAction(id: 'thaal_note', title: 'Note'),
+  ];
+
+  /// Visible for tests.
+  static ReaderTextAction? textActionFor(String actionId) => switch (actionId) {
+    'thaal_highlight' => ReaderTextAction.highlight,
+    'thaal_note' => ReaderTextAction.note,
+    _ => null,
+  };
+
+  @override
+  bool get supportsHighlights =>
+      _publication != null && _format == PublicationFormat.epub;
+
+  @override
+  Future<bool> showHighlights(List<ReaderHighlight> highlights) async {
+    if (!supportsHighlights) return false;
+    try {
+      await _readium.applyDecorations(
+        _highlightGroup,
+        decorationsFrom(highlights),
+      );
+      return true;
+    } on Exception {
+      return false;
+    }
+  }
+
+  /// Rebuilt from app records each time: the plugin's decoration JSON does
+  /// not round-trip in 0.9.0 (spike finding 12). Visible for tests.
+  static List<ReaderDecoration> decorationsFrom(
+    List<ReaderHighlight> highlights,
+  ) => [
+    for (final highlight in highlights)
+      if (Locator.fromJson(highlight.locator.locator) case final locator?)
+        ReaderDecoration(
+          id: highlight.id,
+          locator: locator,
+          style: ReaderDecorationStyle(
+            style: DecorationStyle.highlight,
+            tint: highlight.color.tint,
+          ),
+        ),
+  ];
 
   /// Visible for tests. `fontSize` is a ratio in 0.9.0 (spike finding 5).
   static EPUBPreferences epubPreferencesFrom(ReaderAppearance appearance) {
@@ -322,5 +399,42 @@ class ReadiumPublicationReader implements PublicationReader {
       _ => ReaderFailureKind.engine,
     };
     return ReaderFailure(kind, code: code.name);
+  }
+}
+
+/// [LocatorInterpreter] for Readium locators.
+class ReadiumLocatorInterpreter implements LocatorInterpreter {
+  const ReadiumLocatorInterpreter();
+
+  /// EPUB progression within a resource is a float; positions this close
+  /// are treated as the same page.
+  static const double _sameProgressionTolerance = 0.001;
+
+  @override
+  ReaderPosition describe(LocatorEnvelope locator) {
+    final parsed = Locator.fromJson(locator.locator);
+    if (parsed == null) return ReaderPosition(locator: locator);
+    return ReadiumPublicationReader.positionFrom(parsed, locator.format);
+  }
+
+  @override
+  bool isSameLocation(LocatorEnvelope a, LocatorEnvelope b) {
+    if (a.format != b.format) return false;
+    final first = Locator.fromJson(a.locator);
+    final second = Locator.fromJson(b.locator);
+    if (first == null || second == null || first.href != second.href) {
+      return false;
+    }
+    final locationsA = first.locations;
+    final locationsB = second.locations;
+    if (a.format == PublicationFormat.pdf) {
+      return locationsA?.position == locationsB?.position;
+    }
+    final progressionA = locationsA?.progression;
+    final progressionB = locationsB?.progression;
+    if (progressionA == null || progressionB == null) {
+      return progressionA == progressionB;
+    }
+    return (progressionA - progressionB).abs() <= _sameProgressionTolerance;
   }
 }

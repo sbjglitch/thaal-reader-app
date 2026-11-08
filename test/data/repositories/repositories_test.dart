@@ -283,6 +283,15 @@ void main() {
       expect(list.first.updatedAt, later);
     });
 
+    test('lists bookmarks of every book newest first', () async {
+      await books.addBook(sampleBook(id: 'book-2'));
+      await bookmarks.addBookmark(bookmark('old', minute: 1));
+      await bookmarks.addBookmark(bookmark('new', bookId: 'book-2', minute: 9));
+      await bookmarks.addBookmark(bookmark('mid', minute: 5));
+      final all = await bookmarks.watchAllBookmarks().first;
+      expect(all.map((b) => b.id), ['new', 'mid', 'old']);
+    });
+
     test('a bookmark must reference an existing book', () {
       expect(
         bookmarks.addBookmark(bookmark('x', bookId: 'missing')),

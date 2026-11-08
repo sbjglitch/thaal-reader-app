@@ -8,6 +8,8 @@ import 'package:thaal/app/providers.dart';
 import 'package:thaal/core/logging/app_logger.dart';
 import 'package:thaal/data/database/app_database.dart';
 import 'package:thaal/data/repositories/drift_book_repository.dart';
+import 'package:thaal/data/repositories/drift_bookmark_repository.dart';
+import 'package:thaal/data/repositories/drift_highlight_repository.dart';
 import 'package:thaal/data/repositories/drift_reading_progress_repository.dart';
 import 'package:thaal/domain/entities/enums.dart';
 import 'package:thaal/domain/entities/locator_envelope.dart';
@@ -55,8 +57,11 @@ void main() {
     await temp.delete(recursive: true);
   });
 
-  Future<void> addBook({bool withFile = true}) async {
-    final book = sampleBook();
+  Future<void> addBook({
+    bool withFile = true,
+    PublicationFormat format = PublicationFormat.epub,
+  }) async {
+    final book = sampleBook(format: format);
     await DriftBookRepository(db).addBook(book);
     if (withFile) {
       final file = storage.file(book.filePath);
@@ -65,9 +70,9 @@ void main() {
     }
   }
 
-  Future<ReaderState> start() async {
+  Future<ReaderState> start({String? bookmarkId}) async {
     subscription = container.listen(
-      readerControllerProvider('book-1'),
+      readerControllerProvider(ReaderRequest('book-1', bookmarkId: bookmarkId)),
       (_, _) {},
     );
     // Let the microtask-started open run to completion.
@@ -78,8 +83,9 @@ void main() {
     return subscription.read();
   }
 
-  ReaderController controller() =>
-      container.read(readerControllerProvider('book-1').notifier);
+  ReaderController controller() => container.read(
+    readerControllerProvider(const ReaderRequest('book-1')).notifier,
+  );
 
   Future<void> settle() =>
       Future<void>.delayed(const Duration(milliseconds: 5));
@@ -128,6 +134,61 @@ void main() {
     expect(state.initialLocator?.locator['href'], 'chapter9.xhtml');
   });
 
+  test(
+    'a bookmark request opens at the bookmark, not the saved place',
+    () async {
+      await addBook();
+      await DriftReadingProgressRepository(db).saveProgress(
+        ReadingProgress(
+          bookId: 'book-1',
+          locator: sampleLocator(href: 'chapter9.xhtml'),
+          updatedAt: fixedTime,
+        ),
+      );
+      await DriftBookmarkRepository(db).addBookmark(
+        Bookmark(
+          id: 'bm-1',
+          bookId: 'book-1',
+          locator: sampleLocator(href: 'chapter2.xhtml'),
+          createdAt: fixedTime,
+          updatedAt: fixedTime,
+        ),
+      );
+      final state = await start(bookmarkId: 'bm-1') as ReaderOpen;
+      expect(state.initialLocator?.locator['href'], 'chapter2.xhtml');
+      expect(state.restoreFailed, isFalse);
+    },
+  );
+
+  test('an unknown bookmark falls back to the saved place', () async {
+    await addBook();
+    await DriftReadingProgressRepository(db).saveProgress(
+      ReadingProgress(
+        bookId: 'book-1',
+        locator: sampleLocator(href: 'chapter9.xhtml'),
+        updatedAt: fixedTime,
+      ),
+    );
+    final state = await start(bookmarkId: 'gone') as ReaderOpen;
+    expect(state.initialLocator?.locator['href'], 'chapter9.xhtml');
+  });
+
+  test('going to a locator saves the current place first', () async {
+    await addBook();
+    await start();
+    reader.emit(ReaderPositionChanged(position('c3', progression: 0.5)));
+    await settle();
+    final target = position('c7').locator;
+    expect(await controller().goToLocator(target), isTrue);
+    expect(reader.visited.last, target);
+    final saved = await DriftReadingProgressRepository(db)
+        .getProgress('book-1');
+    expect(
+      saved?.locator?.decode(PublicationFormat.epub)?.locator['href'],
+      'c3',
+    );
+  });
+
   test('an unusable saved locator opens at the start and is kept', () async {
     await addBook();
     final progress = DriftReadingProgressRepository(db);
@@ -164,6 +225,112 @@ void main() {
     expect(book!.readingStatus, ReadingStatus.reading);
     expect(book.lastOpenedAt, isNotNull);
     expect((subscription.read() as ReaderOpen).ready, isTrue);
+  });
+
+  group('highlights', () {
+    Future<void> eventually(bool Function() condition) async {
+      for (var i = 0; i < 200 && !condition(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(condition(), isTrue);
+    }
+
+    ReaderTextActionEvent selection(ReaderTextAction action) =>
+        ReaderTextActionEvent(
+          action: action,
+          locator: position('c2', progression: 0.4).locator,
+          selectedText: 'chosen words',
+        );
+
+    Future<List<Highlight>> stored() =>
+        DriftHighlightRepository(db).watchHighlights('book-1').first;
+
+    test('saved highlights are drawn once the engine is ready', () async {
+      await addBook();
+      await DriftHighlightRepository(db).addHighlight(
+        Highlight(
+          id: 'hl-1',
+          bookId: 'book-1',
+          locator: sampleLocator(href: 'c5.xhtml'),
+          color: HighlightColor.pink,
+          createdAt: fixedTime,
+          updatedAt: fixedTime,
+        ),
+      );
+      final state = await start() as ReaderOpen;
+      expect(state.supportsHighlights, isTrue);
+      expect(reader.shownHighlights, isEmpty); // Not before ready.
+
+      reader.emit(const ReaderReady());
+      await eventually(() => reader.shownHighlights.isNotEmpty);
+      final shown = reader.shownHighlights.last.single;
+      expect(shown.id, 'hl-1');
+      expect(shown.color, HighlightColor.pink);
+      expect(shown.locator.locator['href'], 'c5.xhtml');
+    });
+
+    test('a highlight action saves the selection and redraws', () async {
+      await addBook();
+      await start();
+      reader.emit(const ReaderReady());
+      final notices = <ReaderNotice>[];
+      controller().notices.listen(notices.add);
+
+      reader.emit(selection(ReaderTextAction.highlight));
+      await eventually(() => reader.shownHighlights.lastOrNull?.length == 1);
+
+      final highlight = (await stored()).single;
+      expect(highlight.selectedText, 'chosen words');
+      expect(highlight.color, HighlightColor.yellow);
+      expect(notices, isEmpty);
+    });
+
+    test('a note action saves, then asks to edit the highlight', () async {
+      await addBook();
+      await start();
+      final notices = <ReaderNotice>[];
+      controller().notices.listen(notices.add);
+
+      reader.emit(selection(ReaderTextAction.note));
+      await eventually(() => notices.isNotEmpty);
+      final id = (await stored()).single.id;
+      expect((notices.single as EditHighlightNotice).highlightId, id);
+    });
+
+    test('tapping a highlight asks to edit it', () async {
+      await addBook();
+      await start();
+      final notices = <ReaderNotice>[];
+      controller().notices.listen(notices.add);
+      reader.emit(const ReaderHighlightTapped('hl-9'));
+      await eventually(() => notices.isNotEmpty);
+      expect((notices.single as EditHighlightNotice).highlightId, 'hl-9');
+    });
+
+    test('a failed save is reported and nothing is drawn', () async {
+      await addBook();
+      await start();
+      reader.emit(const ReaderReady());
+      final notices = <ReaderNotice>[];
+      controller().notices.listen(notices.add);
+      // The book disappears underneath the reader, so the insert fails.
+      await DriftBookRepository(db).removeBook('book-1');
+
+      reader.emit(selection(ReaderTextAction.highlight));
+      await eventually(() => notices.isNotEmpty);
+      expect(notices.single, isA<HighlightSaveFailedNotice>());
+    });
+
+    test('PDF offers no highlights and ignores text actions', () async {
+      await addBook(format: PublicationFormat.pdf);
+      final state = await start() as ReaderOpen;
+      expect(state.supportsHighlights, isFalse);
+      reader.emit(const ReaderReady());
+      reader.emit(selection(ReaderTextAction.highlight));
+      await settle();
+      expect(await stored(), isEmpty);
+      expect(reader.shownHighlights, isEmpty);
+    });
   });
 
   test('reaching the end marks the book finished', () async {

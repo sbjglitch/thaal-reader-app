@@ -14,7 +14,7 @@ import 'package:thaal/features/reader/presentation/reader_settings_sheet.dart';
 var _accept = true;
 
 class _RecordingController extends ReaderController {
-  _RecordingController(super.bookId);
+  _RecordingController(super.request);
 
   final updates = <ReaderPreferences>[];
   final bool accept = _accept;
@@ -42,13 +42,16 @@ void main() {
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
           readerControllerProvider.overrideWith2(
-            (bookId) => controller = _RecordingController(bookId),
+            (request) => controller = _RecordingController(request),
           ),
         ],
         child: MaterialApp(
           theme: AppTheme.light,
           home: Scaffold(
-            body: ReaderSettingsSheet(bookId: 'book-1', format: format),
+            body: ReaderSettingsSheet(
+              request: const ReaderRequest('book-1'),
+              format: format,
+            ),
           ),
         ),
       ),

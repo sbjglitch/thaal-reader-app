@@ -69,7 +69,6 @@ class BookGridTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      ?status,
                     ],
                   ),
                 ),
@@ -86,6 +85,8 @@ class BookGridTile extends StatelessWidget {
               ),
             ],
           ),
+          // Below the menu button so it can use the full cell width.
+          ?status,
         ],
       ),
     );

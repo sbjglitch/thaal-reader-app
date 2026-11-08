@@ -1,13 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/providers.dart';
 import '../../../app/theme/app_color_tokens.dart';
 import '../../../app/theme/app_spacing_tokens.dart';
+import '../../../core/widgets/app_empty_state.dart';
 import '../../../core/widgets/app_error_state.dart';
 import '../../../core/widgets/app_loading_indicator.dart';
+import '../../../core/widgets/sheet_messenger.dart';
 import '../../../domain/entities/enums.dart';
 import '../../../services/reader/publication_reader.dart';
+import '../../bookmarks/application/bookmarks.dart';
+import '../../bookmarks/presentation/bookmark_widgets.dart';
+import '../../highlights/application/highlights.dart';
+import '../../highlights/presentation/highlight_widgets.dart';
 import '../application/reader_controller.dart';
 import 'reader_settings_sheet.dart';
 import 'toc_sheet.dart';
@@ -16,9 +24,9 @@ import 'toc_sheet.dart';
 /// The engine view fills the screen; a tap in the middle of the page shows
 /// or hides the top and bottom controls.
 class ReaderScreen extends ConsumerStatefulWidget {
-  const ReaderScreen({super.key, required this.bookId});
+  const ReaderScreen({super.key, required this.request});
 
-  final String bookId;
+  final ReaderRequest request;
 
   @override
   ConsumerState<ReaderScreen> createState() => _ReaderScreenState();
@@ -27,6 +35,8 @@ class ReaderScreen extends ConsumerStatefulWidget {
 class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   final _controlsVisible = ValueNotifier<bool>(true);
   Widget? _view;
+  ReaderController? _noticeSource;
+  StreamSubscription<ReaderNotice>? _notices;
 
   @override
   void didChangeDependencies() {
@@ -34,23 +44,53 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     // The "system" reading theme follows the device's light/dark setting.
     final brightness = MediaQuery.platformBrightnessOf(context);
     final controller = ref.read(
-      readerControllerProvider(widget.bookId).notifier,
+      readerControllerProvider(widget.request).notifier,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) controller.setPlatformBrightness(brightness);
     });
   }
 
+  /// Follows the controller's notices; a retry creates a new controller.
+  void _listenToNotices(ReaderController controller) {
+    if (identical(controller, _noticeSource)) return;
+    _noticeSource = controller;
+    unawaited(_notices?.cancel());
+    _notices = controller.notices.listen(_onNotice);
+  }
+
+  void _onNotice(ReaderNotice notice) {
+    if (!mounted) return;
+    final current = ref.read(readerControllerProvider(widget.request));
+    if (current is! ReaderOpen) return;
+    switch (notice) {
+      case EditHighlightNotice(:final highlightId):
+        unawaited(
+          showHighlightEditor(
+            context,
+            bookId: current.book.id,
+            highlightId: highlightId,
+          ),
+        );
+      case HighlightSaveFailedNotice():
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('The highlight could not be saved.')),
+        );
+    }
+  }
+
   @override
   void dispose() {
+    unawaited(_notices?.cancel());
     _controlsVisible.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = readerControllerProvider(widget.bookId);
+    final provider = readerControllerProvider(widget.request);
     final state = ref.watch(provider);
+    _listenToNotices(ref.read(provider.notifier));
     ref.listen(provider, (previous, next) {
       if (next is ReaderOpen && next.restoreFailed && previous is! ReaderOpen) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -89,8 +129,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
           loading: const AppLoadingIndicator(),
         );
     final controller = ref.read(
-      readerControllerProvider(widget.bookId).notifier,
+      readerControllerProvider(widget.request).notifier,
     );
+    final bookmarks =
+        ref.watch(bookBookmarksProvider(state.book.id)).value ?? const [];
+    final here = _bookmarkAt(state.position, bookmarks);
 
     return ValueListenableBuilder<bool>(
       valueListenable: _controlsVisible,
@@ -109,6 +152,14 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 onContents: state.toc.isEmpty
                     ? null
                     : () => _showToc(state.toc, controller),
+                bookmarked: here != null,
+                onToggleBookmark: state.position == null
+                    ? null
+                    : () => _toggleBookmark(state, here),
+                onBookmarks: () => _showBookmarks(state, controller),
+                onHighlights: state.supportsHighlights
+                    ? () => _showHighlights(state, controller)
+                    : null,
               ),
             ),
           ),
@@ -125,7 +176,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                 onNext: controller.goForward,
                 onSettings: () => showReaderSettingsSheet(
                   context,
-                  bookId: widget.bookId,
+                  request: widget.request,
                   format: state.book.format,
                 ),
               ),
@@ -135,6 +186,93 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
       ),
       child: view,
     );
+  }
+
+  /// The bookmark at the current position, if any.
+  BookmarkEntry? _bookmarkAt(
+    ReaderPosition? position,
+    List<BookmarkEntry> bookmarks,
+  ) {
+    if (position == null) return null;
+    final interpreter = ref.read(locatorInterpreterProvider);
+    for (final entry in bookmarks) {
+      final locator = entry.locator;
+      if (locator != null &&
+          interpreter.isSameLocation(locator, position.locator)) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _toggleBookmark(ReaderOpen state, BookmarkEntry? here) async {
+    if (here != null) {
+      return deleteBookmarkWithUndo(context, ref, here.bookmark);
+    }
+    final position = state.position;
+    if (position == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref
+          .read(bookmarkActionsProvider)
+          .add(state.book.id, position.locator);
+    } on Object {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('The bookmark could not be saved.')),
+      );
+      return;
+    }
+    messenger.showSnackBar(const SnackBar(content: Text('Bookmark added.')));
+  }
+
+  Future<void> _showBookmarks(
+    ReaderOpen state,
+    ReaderController controller,
+  ) async {
+    final entry = await showModalBottomSheet<BookmarkEntry>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _BookmarksSheet(bookId: state.book.id),
+    );
+    if (entry == null || !mounted) return;
+    final locator = entry.locator;
+    final found = locator != null && await controller.goToLocator(locator);
+    if (!found && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This bookmark\'s location could not be found. '
+            'The bookmark has been kept.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showHighlights(
+    ReaderOpen state,
+    ReaderController controller,
+  ) async {
+    final entry = await showModalBottomSheet<HighlightEntry>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => HighlightsSheet(bookId: state.book.id),
+    );
+    if (entry == null || !mounted) return;
+    final locator = entry.locator;
+    final found = locator != null && await controller.goToLocator(locator);
+    if (!found && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This highlight\'s location could not be found. '
+            'The highlight and its note have been kept.',
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _showToc(List<TocEntry> toc, ReaderController controller) async {
@@ -206,10 +344,25 @@ class _Chrome extends StatelessWidget {
 }
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.state, required this.onContents});
+  const _TopBar({
+    required this.state,
+    required this.onContents,
+    required this.bookmarked,
+    required this.onToggleBookmark,
+    required this.onBookmarks,
+    required this.onHighlights,
+  });
 
   final ReaderOpen state;
   final VoidCallback? onContents;
+  final bool bookmarked;
+
+  /// Null until the reader has reported a position.
+  final VoidCallback? onToggleBookmark;
+  final VoidCallback onBookmarks;
+
+  /// Null when the publication has no highlight support (PDF).
+  final VoidCallback? onHighlights;
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +396,24 @@ class _TopBar extends StatelessWidget {
                 ],
               ),
             ),
+            IconButton(
+              tooltip: bookmarked ? 'Remove bookmark' : 'Add bookmark',
+              isSelected: bookmarked,
+              icon: const Icon(Icons.bookmark_add_outlined),
+              selectedIcon: const Icon(Icons.bookmark),
+              onPressed: onToggleBookmark,
+            ),
+            IconButton(
+              tooltip: 'Bookmarks',
+              icon: const Icon(Icons.bookmarks_outlined),
+              onPressed: onBookmarks,
+            ),
+            if (onHighlights != null)
+              IconButton(
+                tooltip: 'Highlights',
+                icon: const Icon(Icons.format_color_text),
+                onPressed: onHighlights,
+              ),
             // Shown only when the publication has a table of contents.
             if (onContents != null)
               IconButton(
@@ -366,6 +537,77 @@ class _ProblemView extends StatelessWidget {
       message: message,
       retryLabel: canRetry ? 'Try again' : 'Back to library',
       onRetry: canRetry ? onRetry : back,
+    );
+  }
+}
+
+/// Bookmarks of the open book; returns the one to go to.
+class _BookmarksSheet extends ConsumerWidget {
+  const _BookmarksSheet({required this.bookId});
+
+  final String bookId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bookmarks = ref.watch(bookBookmarksProvider(bookId));
+    final text = Theme.of(context).textTheme;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.6,
+      maxChildSize: 0.9,
+      builder: (context, scrollController) => SheetMessenger(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.screenEdge,
+                0,
+                AppSpacing.screenEdge,
+                AppSpacing.space8,
+              ),
+              child: Text('Bookmarks', style: text.titleMedium),
+            ),
+            Expanded(
+              child: bookmarks.when(
+                loading: () => const AppLoadingIndicator(),
+                error: (_, _) => const AppErrorState(
+                  title: 'Bookmarks could not be loaded',
+                  message: 'Your bookmarks have not been changed.',
+                ),
+                data: (list) => list.isEmpty
+                    ? const AppEmptyState(
+                        icon: Icons.bookmark_border,
+                        title: 'No bookmarks in this book',
+                        message:
+                            'Tap the bookmark button at the top to save the '
+                            'current page.',
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: list.length,
+                        itemBuilder: (context, index) {
+                          final entry = list[index];
+                          return BookmarkTile(
+                            key: ValueKey(entry.bookmark.id),
+                            entry: entry,
+                            showBookTitle: false,
+                            onOpen: () => Navigator.of(context).pop(entry),
+                            onRename: () =>
+                                renameBookmark(context, ref, entry.bookmark),
+                            onDelete: () => deleteBookmarkWithUndo(
+                              context,
+                              ref,
+                              entry.bookmark,
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

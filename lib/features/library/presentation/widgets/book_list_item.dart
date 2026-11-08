@@ -136,7 +136,16 @@ class _StatusLine extends StatelessWidget {
           ExcludeSemantics(child: Icon(icon, size: 14, color: color)),
           const SizedBox(width: AppSpacing.space4),
         ],
-        Text(label, style: style),
+        // Ellipsis rather than overflow in narrow grid cells and at large
+        // text sizes.
+        Flexible(
+          child: Text(
+            label,
+            style: style,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }

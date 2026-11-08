@@ -12,25 +12,25 @@ import '../application/reader_preferences_controller.dart';
 /// apply to every book.
 Future<void> showReaderSettingsSheet(
   BuildContext context, {
-  required String bookId,
+  required ReaderRequest request,
   required PublicationFormat format,
 }) {
   return showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (_) => ReaderSettingsSheet(bookId: bookId, format: format),
+    builder: (_) => ReaderSettingsSheet(request: request, format: format),
   );
 }
 
 class ReaderSettingsSheet extends ConsumerStatefulWidget {
   const ReaderSettingsSheet({
     super.key,
-    required this.bookId,
+    required this.request,
     required this.format,
   });
 
-  final String bookId;
+  final ReaderRequest request;
   final PublicationFormat format;
 
   @override
@@ -45,7 +45,7 @@ class _ReaderSettingsSheetState extends ConsumerState<ReaderSettingsSheet> {
 
   Future<void> _update(ReaderPreferences preferences) async {
     final applied = await ref
-        .read(readerControllerProvider(widget.bookId).notifier)
+        .read(readerControllerProvider(widget.request).notifier)
         .updatePreferences(preferences);
     if (!applied && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

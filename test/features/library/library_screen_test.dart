@@ -224,4 +224,35 @@ void main() {
     expect(find.text('Remove from library'), findsOneWidget);
     expect(find.text('Add to collection'), findsNothing);
   });
+
+  testWidgets('grid status lines fit a phone-width cell', (tester) async {
+    // 1080 × 2392 px at 2.625: a common Android phone in portrait.
+    tester.view.physicalSize = const Size(1080, 2392);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
+    LibraryItem item(String id, ReadingStatus status, {bool file = true}) =>
+        LibraryItem(
+          book: sampleBook(
+            id: id,
+            title: 'A rather long title that needs two lines',
+            format: PublicationFormat.pdf,
+          ).copyWith(readingStatus: status),
+          fileAvailable: file,
+          progression: 0.27,
+        );
+
+    await pump(
+      tester,
+      () => Stream.value([
+        item('a', ReadingStatus.reading),
+        item('b', ReadingStatus.finished),
+        item('c', ReadingStatus.unread, file: false),
+      ]),
+      preferences: {'flutter.library.layout': 'grid'},
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Reading · 27%'), findsOneWidget);
+  });
 }

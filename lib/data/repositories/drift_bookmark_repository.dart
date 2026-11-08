@@ -20,6 +20,16 @@ class DriftBookmarkRepository implements BookmarkRepository {
   }
 
   @override
+  Stream<List<Bookmark>> watchAllBookmarks() {
+    final query = _db.select(_db.bookmarks)
+      ..orderBy([
+        (t) => OrderingTerm.desc(t.createdAt),
+        (t) => OrderingTerm.asc(t.id),
+      ]);
+    return query.watch().map((rows) => rows.map(_fromRow).toList());
+  }
+
+  @override
   Future<void> addBookmark(Bookmark bookmark) =>
       guardDatabase('addBookmark', () {
         return _db

@@ -81,6 +81,10 @@ final publicationReaderProvider = Provider<PublicationReader>(
   (ref) => ReadiumPublicationReader(ref.watch(readiumProvider)),
 );
 
+final locatorInterpreterProvider = Provider<LocatorInterpreter>(
+  (ref) => const ReadiumLocatorInterpreter(),
+);
+
 final publicationInspectorProvider = Provider<PublicationInspector>((ref) {
   final reader = ref.watch(publicationReaderProvider);
   return ReadiumPublicationInspector(
