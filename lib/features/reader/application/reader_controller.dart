@@ -13,6 +13,7 @@ import '../../../domain/entities/reader_preferences.dart';
 import '../../../domain/entities/reading_data.dart';
 import '../../../services/reader/publication_reader.dart';
 import '../../highlights/application/highlights.dart';
+import '../../settings/application/app_theme_controller.dart';
 import 'progress_saver.dart';
 import 'reader_preferences_controller.dart';
 
@@ -134,6 +135,9 @@ class ReaderController extends Notifier<ReaderState> {
   AppLifecycleListener? _lifecycle;
   bool _disposed = false;
   bool _recordedOpen = false;
+
+  /// The app's current brightness, which the "system" reading theme uses.
+  /// [build] replaces the device value with the app theme's.
   Brightness _brightness =
       WidgetsBinding.instance.platformDispatcher.platformBrightness;
   ReaderAppearance? _appearance;
@@ -149,6 +153,7 @@ class ReaderController extends Notifier<ReaderState> {
   ReaderState build() {
     _reader = ref.watch(publicationReaderProvider);
     _logger = ref.watch(appLoggerProvider);
+    _brightness = appBrightnessFor(ref.read(appThemeProvider), _brightness);
     ref.onDispose(_dispose);
     unawaited(Future.microtask(_openSafely));
     return const ReaderOpening();
@@ -387,8 +392,9 @@ class ReaderController extends Notifier<ReaderState> {
     return true;
   }
 
-  /// Follows the system light/dark setting for the "system" reading theme.
-  Future<void> setPlatformBrightness(Brightness brightness) async {
+  /// Follows the app's light/dark appearance for the "system" reading
+  /// theme.
+  Future<void> setAppBrightness(Brightness brightness) async {
     if (brightness == _brightness) return;
     _brightness = brightness;
     if (state is ReaderOpen) {

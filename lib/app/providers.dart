@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/logging/app_logger.dart';
 import '../data/database/app_database.dart';
+import '../data/preferences/app_preferences_store.dart';
 import '../data/preferences/reader_preferences_store.dart';
 import '../data/repositories/drift_book_repository.dart';
 import '../data/repositories/drift_bookmark_repository.dart';
@@ -46,6 +47,10 @@ final libraryStorageProvider = Provider<LibraryStorage>(
 final sharedPreferencesProvider = Provider<SharedPreferences>(
   (ref) =>
       throw UnimplementedError('sharedPreferencesProvider is not overridden'),
+);
+
+final appPreferencesStoreProvider = Provider<AppPreferencesStore>(
+  (ref) => AppPreferencesStore(ref.watch(sharedPreferencesProvider)),
 );
 
 final readerPreferencesStoreProvider = Provider<ReaderPreferencesStore>(

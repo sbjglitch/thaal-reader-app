@@ -33,15 +33,16 @@ final readerPreferencesProvider =
     );
 
 /// Resolves the reading theme to page colours from the app's colour tokens
-/// (UI/UX §3.4). `system` follows [platformBrightness].
+/// (UI/UX §3.4). `system` follows the app's [appBrightness], which itself
+/// follows the device unless the app theme is set (UI/UX §3.3).
 ReaderAppearance resolveAppearance(
   ReaderPreferences preferences,
-  Brightness platformBrightness,
+  Brightness appBrightness,
 ) {
   final dark = switch (preferences.theme) {
     ReadingTheme.light => false,
     ReadingTheme.dark => true,
-    ReadingTheme.system => platformBrightness == Brightness.dark,
+    ReadingTheme.system => appBrightness == Brightness.dark,
   };
   final tokens = dark ? AppColorTokens.dark : AppColorTokens.light;
   return ReaderAppearance(

@@ -538,14 +538,35 @@ establishes a stable, low-risk implementation and the PRD is updated.
 
 ### 5.3 Reading preferences
 
--   [ ] Implement system/light/dark app theme.
--   [ ] Implement reading themes supported by the reader engine.
--   [ ] Implement font size controls.
--   [ ] Persist preferences locally.
--   [ ] Apply preferences on the next reader launch.
--   [ ] Decide which preferences are global and which are per-book.
+-   [x] Implement system/light/dark app theme.
+-   [x] Implement reading themes supported by the reader engine.
+-   [x] Implement font size controls.
+-   [x] Persist preferences locally.
+-   [x] Apply preferences on the next reader launch.
+-   [x] Decide which preferences are global and which are per-book.
 -   [ ] Keep device-specific preferences out of portable backups unless
-    explicitly approved.
+    explicitly approved. (Milestone 6.)
+
+Reading themes, EPUB text size, page layout and PDF fit were built in
+Milestone 4 as global settings (none are per-book).
+
+Implementation notes (Milestone 5c):
+
+-   Settings has an Appearance section with Theme: System / Light /
+    Dark, stored as `app.theme` in SharedPreferences (default System;
+    an unknown value reads as System). The app switches only after the
+    value has been saved; a failed save keeps the current theme and
+    says so.
+-   The reader's "System" reading theme now follows the app's
+    appearance rather than the device's (UI/UX §3.4: "follows the
+    application/system theme"). Light and Dark reading themes are
+    unchanged.
+-   Other suggested Settings sections are not shown yet: reading
+    defaults live in the reader settings sheet, backup arrives with
+    Milestone 6, and app version needs a new dependency.
+
+Verified on the Android phone (8 Nov 2026): switching System / Light /
+Dark, and the choice kept after restarting the app.
 
 ### Deliverables
 
@@ -560,6 +581,7 @@ establishes a stable, low-risk implementation and the PRD is updated.
     the locator remains valid.
 -   Notes remain available even if a highlight cannot be reapplied.
 -   Preference changes persist and apply consistently.
+
 
 ## 10. Milestone 6 --- Backup and restore
 

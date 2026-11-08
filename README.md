@@ -7,8 +7,8 @@ the device.
 > **Status:** Milestone 5 (bookmarks, highlights). Import, the library,
 > reading EPUB and PDF books with a table of contents, saved reading
 > position, reading settings, bookmarks, and EPUB highlights and notes
-> work. The app theme setting and backup are not built yet. Android is the
-> first target;
+> work, as does the app theme setting. Backup is not built yet. Android is
+> the first target;
 > **iOS work is on hold**.
 
 Product scope, architecture and milestones live in [`docs/`](docs/README.md).
