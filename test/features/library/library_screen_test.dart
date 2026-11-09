@@ -115,6 +115,36 @@ void main() {
     expect(picker.releases, 1);
   });
 
+  testWidgets('files the picker could not copy point at storage', (
+    tester,
+  ) async {
+    picker.error = const PickedFilesUnreadable();
+
+    await pump(tester, () => Stream.value(const []));
+    await tester.tap(find.byTooltip('Import books'));
+    await tester.pump();
+
+    expect(
+      find.text(
+        'The file could not be copied. Check that there is enough free '
+        'storage and try again.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('The file picker could not be opened.'), findsNothing);
+    expect(picker.releases, 1);
+  });
+
+  testWidgets('a picker that cannot open says so', (tester) async {
+    picker.error = StateError('no activity');
+
+    await pump(tester, () => Stream.value(const []));
+    await tester.tap(find.byTooltip('Import books'));
+    await tester.pump();
+
+    expect(find.text('The file picker could not be opened.'), findsOneWidget);
+  });
+
   testWidgets('failures are explained in plain language', (tester) async {
     picker.next = const [ImportSource(name: 'notes.txt', path: '/n')];
     service.respond = (source, _) =>

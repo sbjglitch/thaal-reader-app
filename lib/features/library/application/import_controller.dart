@@ -28,15 +28,23 @@ final class ImportRunning extends ImportState {
   final int total;
 }
 
+enum ImportPickerFailure {
+  /// The document picker could not be opened.
+  unavailable,
+
+  /// Files were chosen but could not be copied, usually for lack of space.
+  filesUnreadable,
+}
+
 /// A batch finished. The screen reports [results], then calls
 /// [ImportController.importDuplicatesAnyway] or [ImportController.dismiss].
 final class ImportFinished extends ImportState {
-  const ImportFinished(this.results, {this.pickerFailed = false});
+  const ImportFinished(this.results, {this.pickerFailure});
 
   final List<ImportResult> results;
 
-  /// The document picker itself could not be opened.
-  final bool pickerFailed;
+  /// Why the picker step failed, if it did; [results] is then empty.
+  final ImportPickerFailure? pickerFailure;
 
   List<ImportSucceeded> get imported =>
       results.whereType<ImportSucceeded>().toList();
@@ -63,11 +71,21 @@ class ImportController extends Notifier<ImportState> {
     final List<ImportSource> sources;
     try {
       sources = await _picker.pickPublications();
+    } on PickedFilesUnreadable {
+      ref.read(appLoggerProvider).warning('import.picked_files_unreadable');
+      state = const ImportFinished(
+        [],
+        pickerFailure: ImportPickerFailure.filesUnreadable,
+      );
+      return;
     } catch (error, stackTrace) {
       ref
           .read(appLoggerProvider)
           .error('import.picker_failed', error, stackTrace: stackTrace);
-      state = const ImportFinished([], pickerFailed: true);
+      state = const ImportFinished(
+        [],
+        pickerFailure: ImportPickerFailure.unavailable,
+      );
       return;
     }
     if (sources.isEmpty) {

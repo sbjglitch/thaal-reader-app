@@ -798,16 +798,16 @@ Progress (7a, 8 Nov 2026):
 
 ### Reliability
 
--   [ ] Test app process death during reading.
+-   [x] Test app process death during reading.
 -   [x] Test app process death during import.
 -   [x] Test app process death during backup and restore.
--   [ ] Test insufficient storage.
+-   [x] Test insufficient storage.
 -   [x] Test missing or externally removed files (library-only restore
     shows "File missing"; re-importing the file relinks it).
 -   [x] Test corrupted EPUB/PDF files.
 -   [x] Test corrupted backup archives.
 -   [ ] Test database migration from the prior released schema.
--   [ ] Test repeated reader open/close cycles.
+-   [x] Test repeated reader open/close cycles.
 -   [ ] Test large libraries and representative large publications.
 
 Phone session (7b, 8 Nov 2026, debug build, synthetic test files). The
@@ -836,8 +836,46 @@ stored checksum and no reading data pointed at a missing book.
     until a launch at least an hour later, because startup cleanup only
     removed entries older than an hour. Fixed: startup now clears all of
     `staging/` (DATABASE_SCHEMA.md §12).
--   Not yet run: process death while reading, low storage, repeated
-    reader open/close, large libraries.
+-   Process death while reading: the app was force-stopped 6 s after
+    the last page turn; page 7 had been saved and the PDF reopened on
+    page 7.
+-   Repeated open/close: 10 EPUB and 10 PDF sessions in a row. No
+    errors; every PDF reader fragment was released (only the Flutter
+    fragment remained). Total memory rose about 35 MB over the first
+    measurement, much of it the WebView loading for the first time,
+    and did not grow per session; 3 WebView objects were still
+    awaiting garbage collection.
+-   Large library (started): with 1,000 synthetic book records added,
+    cold start on the debug build was 3.35--3.48 s, against
+    3.1--3.7 s with 5 books. Scrolling, search, sort and filter have
+    not been checked yet; launch timing against the 3 s target belongs
+    to the profile-build performance pass.
+
+Emulator session (9 Nov 2026, Pixel 10 emulator, Android 17, debug
+build). Storage was filled with a placeholder file.
+
+-   Backup (full and library-only) with no free space: refused in
+    under 0.4 s with "There is not enough storage for the backup.
+    Nothing was saved."; the staging area was empty afterwards.
+-   Reading with no free space: the reader kept working; progress
+    saves failed and were logged as warnings, with no message shown.
+    Once space was freed the next page turn saved, and the database
+    passed an integrity check.
+-   Import with room for the picker's copy but not for Thaal's: refused
+    with "There is not enough free storage on this device."; nothing
+    was left in staging, and the picker's copy was released.
+-   With space freed, the 320 MB PDF imported in 12 s.
+-   Finding: when there is not even room for the file picker's own copy
+    in the app cache, `android_file_picker` 2.1.3 fails the pick with a
+    `PlatformException` (`unknown_path`) and drops the out-of-space
+    cause, and Thaal said "The file picker could not be opened.", which
+    was misleading. Fixed: the picker wrapper maps that code to
+    `PickedFilesUnreadable`, and the library shows "The file could not
+    be copied. Check that there is enough free storage and try again."
+    (verified on the emulator; the partial copy is cleared).
+    Remaining limitation: when several files are picked and only some
+    fail to copy, the plugin silently returns the others, so Thaal
+    cannot report the missing ones.
 
 ### Release preparation
 

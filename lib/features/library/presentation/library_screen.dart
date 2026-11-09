@@ -144,9 +144,17 @@ class LibraryScreen extends ConsumerWidget {
     final controller = ref.read(importControllerProvider.notifier);
     final messenger = ScaffoldMessenger.of(context);
 
-    if (finished.pickerFailed) {
+    if (finished.pickerFailure case final failure?) {
       messenger.showSnackBar(
-        const SnackBar(content: Text('The file picker could not be opened.')),
+        SnackBar(
+          content: Text(switch (failure) {
+            ImportPickerFailure.unavailable =>
+              'The file picker could not be opened.',
+            ImportPickerFailure.filesUnreadable =>
+              'The file could not be copied. Check that there is enough '
+                  'free storage and try again.',
+          }),
+        ),
       );
       return controller.dismiss();
     }

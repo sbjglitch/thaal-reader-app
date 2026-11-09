@@ -12,6 +12,9 @@ import '../../support/fixtures.dart';
 class FakePicker implements DocumentPicker {
   List<ImportSource> next = const [];
   Completer<void>? gate;
+
+  /// Thrown by the next pick instead of returning [next], when set.
+  Object? error;
   int picks = 0;
   int releases = 0;
 
@@ -19,6 +22,7 @@ class FakePicker implements DocumentPicker {
   Future<List<ImportSource>> pickPublications() async {
     picks++;
     await gate?.future;
+    if (error case final error?) throw error;
     return next;
   }
 
@@ -133,19 +137,21 @@ void main() {
   );
 
   test('a picker failure is reported, not thrown', () async {
-    container = ProviderContainer.test(
-      overrides: [
-        documentPickerProvider.overrideWithValue(_ThrowingPicker()),
-        importServiceProvider.overrideWithValue(service),
-      ],
-    );
+    picker.error = StateError('no activity');
     await controller().pickAndImport();
-    expect((state() as ImportFinished).pickerFailed, isTrue);
+    final finished = state() as ImportFinished;
+    expect(finished.pickerFailure, ImportPickerFailure.unavailable);
+    expect(service.calls, isEmpty);
   });
-}
 
-class _ThrowingPicker extends FakePicker {
-  @override
-  Future<List<ImportSource>> pickPublications() async =>
-      throw StateError('no activity');
+  test('chosen files that could not be copied are reported apart', () async {
+    picker.error = const PickedFilesUnreadable();
+    await controller().pickAndImport();
+    final finished = state() as ImportFinished;
+    expect(finished.pickerFailure, ImportPickerFailure.filesUnreadable);
+    expect(service.calls, isEmpty);
+
+    await controller().dismiss();
+    expect(picker.releases, 1);
+  });
 }
