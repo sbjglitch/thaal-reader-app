@@ -808,7 +808,7 @@ Progress (7a, 8 Nov 2026):
 -   [x] Test corrupted backup archives.
 -   [ ] Test database migration from the prior released schema.
 -   [x] Test repeated reader open/close cycles.
--   [ ] Test large libraries and representative large publications.
+-   [x] Test large libraries and representative large publications.
 
 Phone session (7b, 8 Nov 2026, debug build, synthetic test files). The
 app was force-stopped over adb at the moment an operation was in
@@ -845,11 +845,10 @@ stored checksum and no reading data pointed at a missing book.
     measurement, much of it the WebView loading for the first time,
     and did not grow per session; 3 WebView objects were still
     awaiting garbage collection.
--   Large library (started): with 1,000 synthetic book records added,
-    cold start on the debug build was 3.35--3.48 s, against
-    3.1--3.7 s with 5 books. Scrolling, search, sort and filter have
-    not been checked yet; launch timing against the 3 s target belongs
-    to the profile-build performance pass.
+-   Large library: with 1,000 synthetic book records added, cold start
+    on the debug build was 3.35--3.48 s, against 3.1--3.7 s with
+    5 books. Launch timing against the 3 s target belongs to the
+    profile-build performance pass.
 
 Emulator session (9 Nov 2026, Pixel 10 emulator, Android 17, debug
 build). Storage was filled with a placeholder file.
@@ -876,6 +875,19 @@ build). Storage was filled with a placeholder file.
     Remaining limitation: when several files are picked and only some
     fail to copy, the plugin silently returns the others, so Thaal
     cannot report the missing ones.
+
+Emulator session (10 Nov 2026, same emulator and build), with the same
+1,000-record test database (1,005 books, all "File missing" because
+their files were never copied in):
+
+-   Library list and grid scrolled through repeated flings with no
+    errors or layout overflows in the log.
+-   Search for a number unique to one title returned exactly that book.
+-   Sort by title with the PDF and Finished filters showed the same
+    first titles, in the same order, as the matching database query
+    (87 books). Clearing the filters restored the full list.
+-   Frame timing was not measured: debug builds are not representative
+    (`TESTING_STRATEGY.md` §8), and it belongs to the profile pass.
 
 ### Release preparation
 
