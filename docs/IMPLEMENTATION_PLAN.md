@@ -889,6 +889,54 @@ their files were never copied in):
 -   Frame timing was not measured: debug builds are not representative
     (`TESTING_STRATEGY.md` §8), and it belongs to the profile pass.
 
+### Reader additions (user request, 10 Nov 2026)
+
+Added before release at the user's request, one phase at a time, each
+checked against flutter_readium 0.9.0 first. A UI review of the whole
+app follows them.
+
+-   [x] Phase 1: sepia and twilight reading themes (EPUB; PDF pages
+    have no colour setting). Shown as chips with colour swatches.
+-   [x] Phase 2: page margins and text alignment (EPUB). Margins are a
+    slider (50--200 % of the engine default); alignment is Original,
+    Left or Justified. A forced alignment turns off the book's own
+    styles, so the engine's defaults apply instead; on the emulator
+    this also turned on hyphenation. "Original" restores the book's
+    styles.
+-   [x] Phase 3: font face (EPUB): Original, Serif or Sans-serif, using
+    the device's generic families, so no fonts are bundled. "Original"
+    sends no family, which restores the book's fonts. Bundled fonts can
+    be added later.
+-   [x] Phase 4: bottom scrubber to jump through the publication
+    (EPUB and PDF). PDF jumps land on the exact page shown ("Page N of
+    M"). EPUB jumps use a chapter map rebuilt from the ZIP directory,
+    because the engine only jumps within the open chapter; the
+    percentage shown afterwards can read slightly low (see
+    READER_ENGINE_SPECIFICATION §7.3). Checked on the emulator with the
+    2,000-page PDF and the test EPUB. The scrubber is inset from the
+    screen edges so it does not trigger Android's back gesture. Its
+    track is faint on light pages; that is for the UI pass.
+-   [x] Phase 5: text search (EPUB; the engine refuses PDF search on
+    Android, so it is hidden for PDF). The search button sits in the
+    bottom bar, because the top bar is full at phone width. The search
+    runs when the query is submitted. Results show the text around the
+    match and its chapter; opening one underlines the match. The last
+    search is kept while the book is open. Checked on the emulator: 5
+    matches for "paragraph 12" in the test EPUB, the jump and the
+    underline, and 1,800 matches for "text" in under 2 seconds.
+-   [x] Phase 6: brightness slider in the reader (EPUB and PDF, in
+    Reading settings). It sets the brightness of the app's own window
+    (`WindowManager.LayoutParams.screenBrightness`) through a small
+    `com.sbjglitch.thaal/brightness` channel in `MainActivity`. That
+    needs no permission and never changes the device setting. "Match
+    system brightness" is on by default. A chosen level applies only
+    while a book is open, is remembered on the device, and is not backed
+    up. Checked on the emulator: no override until the slider is
+    dragged; after a drag the window override was 0.12 (dumpsys); it
+    was cleared in the library, restored on reopening the book, kept
+    across Home and back, and cleared again by the switch. iOS is
+    deferred, and the control is hidden there.
+
 ### Release preparation
 
 -   [ ] Configure app icon and launch screen. Launch screen done (app

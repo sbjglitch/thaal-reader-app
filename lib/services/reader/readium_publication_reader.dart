@@ -4,9 +4,11 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_readium/flutter_readium.dart' hide PublicationFormat;
 
 import '../../app/theme/highlight_colors.dart';
+import '../../app/theme/reading_page_colors.dart';
 import '../../domain/entities/enums.dart';
 import '../../domain/entities/locator_envelope.dart';
 import '../../domain/entities/reader_preferences.dart';
+import 'epub_progression_map.dart';
 import 'publication_reader.dart';
 
 /// [PublicationReader] backed by `flutter_readium` 0.9.0. The only place,
@@ -31,6 +33,10 @@ class ReadiumPublicationReader implements PublicationReader {
   Publication? _publication;
   PublicationFormat? _format;
   List<Link> _toc = const [];
+
+  /// Whole-book position map of the open EPUB; null for PDF or when the
+  /// file could not be read.
+  EpubProgressionMap? _epubProgression;
 
   @override
   Stream<ReaderEvent> get events => _events.stream;
@@ -86,6 +92,11 @@ class ReadiumPublicationReader implements PublicationReader {
     _publication = publication;
     _format = format;
     _toc = publication.tocFlattened;
+    if (format == PublicationFormat.epub) {
+      _epubProgression = EpubProgressionMap.fromFile(filePath, [
+        for (final link in publication.readingOrder) link.href,
+      ]);
+    }
     _listen(generation);
     return OpenedPublication(
       title: publication.metadata.title,
@@ -258,6 +269,51 @@ class ReadiumPublicationReader implements PublicationReader {
     }
   }
 
+  @override
+  bool get supportsProgressionJump => switch (_format) {
+    PublicationFormat.epub =>
+      _epubProgression?.resourceCount == _publication?.readingOrder.length,
+    PublicationFormat.pdf => (pageCount ?? 0) > 0,
+    null => false,
+  };
+
+  @override
+  int? get pageCount => _format == PublicationFormat.pdf
+      ? _publication?.metadata.numberOfPages
+      : null;
+
+  @override
+  Future<bool> goToProgression(double progression) async {
+    final publication = _publication;
+    if (publication == null || !supportsProgressionJump) return false;
+    try {
+      switch (_format) {
+        case PublicationFormat.pdf:
+          // Sent as the progression of a whole page, which the Android PDF
+          // navigator rounds back to that page.
+          final pages = pageCount!;
+          final page = pdfPageForProgression(progression, pages);
+          return await _readium.goToProgression(
+            pdfProgressionForPage(page, pages),
+          );
+        case PublicationFormat.epub:
+          final target = _epubProgression!.resolve(progression);
+          final link = publication.readingOrder[target.index];
+          return await _readium.goToLocator(
+            Locator(
+              href: link.href,
+              type: link.type ?? 'application/xhtml+xml',
+              locations: Locations(progression: target.progression),
+            ),
+          );
+        case null:
+          return false;
+      }
+    } on ReadiumException {
+      return false;
+    }
+  }
+
   static const _highlightGroup = 'thaal_highlights';
   static const _textActions = [
     SelectionAction(id: 'thaal_highlight', title: 'Highlight'),
@@ -295,6 +351,74 @@ class ReadiumPublicationReader implements PublicationReader {
     }
   }
 
+  static const _searchGroup = 'thaal_search';
+
+  @override
+  bool get supportsSearch =>
+      _publication != null && _format == PublicationFormat.epub;
+
+  @override
+  Future<List<ReaderSearchResult>> search(String query) async {
+    if (!supportsSearch) {
+      throw const ReaderFailure(ReaderFailureKind.unsupported, code: 'search');
+    }
+    final generation = _generation;
+    final List<TextSearchResult> found;
+    try {
+      found = await _readium.searchInPublication(query);
+    } on ReadiumException catch (error) {
+      throw mapReadiumError(error.error);
+    }
+    // A search that outlived its session would point into another book.
+    if (generation != _generation) return const [];
+    return [for (final result in found) ?searchResultFrom(result)];
+  }
+
+  /// Maps an engine search result, or returns null when it has no matched
+  /// text to show. Visible for tests.
+  static ReaderSearchResult? searchResultFrom(TextSearchResult result) {
+    final text = result.locator.text;
+    final match = _collapse(text?.highlight ?? '').trim();
+    if (match.isEmpty) return null;
+    final title = result.chapterTitle ?? result.locator.title;
+    return ReaderSearchResult(
+      locator: LocatorEnvelope(
+        format: PublicationFormat.epub,
+        locator: result.locator.toJson(),
+      ),
+      before: _collapse(text?.before ?? '').trimLeft(),
+      match: match,
+      after: _collapse(text?.after ?? '').trimRight(),
+      chapterTitle: title == null || title.trim().isEmpty ? null : title.trim(),
+    );
+  }
+
+  static final _whitespace = RegExp(r'\s+');
+  static String _collapse(String text) => text.replaceAll(_whitespace, ' ');
+
+  @override
+  Future<bool> showSearchMatch(LocatorEnvelope? locator) async {
+    if (!supportsSearch) return false;
+    final target = locator == null ? null : Locator.fromJson(locator.locator);
+    if (locator != null && target == null) return false;
+    try {
+      await _readium.applyDecorations(_searchGroup, [
+        if (target != null)
+          ReaderDecoration(
+            id: 'search_match',
+            locator: target,
+            style: const ReaderDecorationStyle(
+              style: DecorationStyle.underline,
+              tint: ReadingPageColors.searchMatch,
+            ),
+          ),
+      ]);
+      return true;
+    } on Exception {
+      return false;
+    }
+  }
+
   /// Rebuilt from app records each time: the plugin's decoration JSON does
   /// not round-trip in 0.9.0 (spike finding 12). Visible for tests.
   static List<ReaderDecoration> decorationsFrom(
@@ -313,13 +437,33 @@ class ReadiumPublicationReader implements PublicationReader {
   ];
 
   /// Visible for tests. `fontSize` is a ratio in 0.9.0 (spike finding 5).
+  ///
+  /// Each call replaces the engine's EPUB preferences as a whole (Android
+  /// `setPreferences` builds a fresh set), so a null field means "the
+  /// publication's own value". Readium applies `textAlign` only while
+  /// publisher styles are off, so a forced alignment turns them off and
+  /// "original" turns them back on.
   static EPUBPreferences epubPreferencesFrom(ReaderAppearance appearance) {
     final preferences = appearance.preferences;
+    final alignment = preferences.textAlignment;
     return EPUBPreferences(
       fontSize: preferences.fontScale,
       scroll: preferences.epubLayout == PageLayout.scroll,
       backgroundColor: appearance.background,
       textColor: appearance.foreground,
+      pageMargins: preferences.pageMargins,
+      publisherStyles: alignment == TextAlignment.original,
+      textAlign: switch (alignment) {
+        TextAlignment.original => null,
+        TextAlignment.start => TextAlign.start,
+        TextAlignment.justify => TextAlign.justify,
+      },
+      // Generic CSS families resolve to the device's own fonts.
+      fontFamily: switch (preferences.fontFace) {
+        FontFace.original => null,
+        FontFace.serif => 'serif',
+        FontFace.sansSerif => 'sans-serif',
+      },
     );
   }
 
@@ -351,6 +495,7 @@ class ReadiumPublicationReader implements PublicationReader {
     _publication = null;
     _format = null;
     _toc = const [];
+    _epubProgression = null;
     await _closeQuietly();
   }
 

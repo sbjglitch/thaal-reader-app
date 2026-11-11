@@ -225,6 +225,7 @@ abstract interface class PublicationReaderService {
   Future<void> setPdfPreferences(ReaderPdfPreferences preferences);
 
   Future<List<ReaderSearchResult>> search(String query);
+  Future<void> showSearchMatch(String? locatorJson);
 }
 ```
 
@@ -417,6 +418,31 @@ Restore last reading position.
 Use the plugin's navigation methods rather than implementing EPUB
 navigation by changing WebView URLs or manipulating publication HTML.
 
+#### Jumping through the book (scrubber)
+
+The bottom scrubber jumps to a whole-book progression. In
+flutter_readium 0.9.0 on Android, `goToProgression` on an EPUB scrolls
+within the open chapter only, and the plugin does not expose Readium's
+positions list. The adapter therefore rebuilds Readium's weights from
+the EPUB's ZIP directory (`EpubProgressionMap`): one position per 1024
+bytes of each reading-order resource, at least one per resource,
+counting the compressed size of a compressed entry, which is Readium's
+rule. A whole-book value resolves to a chapter and a progression within
+it, and the jump goes through `goToLocator`. Only the ZIP directory is
+read; nothing is decompressed.
+
+- The scrubber is shown only when the map covers every reading-order
+  resource. If the file cannot be read or a resource is missing from
+  it, the scrubber is hidden rather than jumping to the wrong place.
+- Jumps are continuous within a chapter, but Readium reports whole
+  positions, so the percentage shown after a jump can be up to one
+  position lower than the target. In a book whose chapters are each a
+  single position (very small or highly compressible chapters), a jump
+  to the end can show, for example, 80%. Ordinary books show a far
+  smaller gap.
+- The jump happens once, when the thumb is released. The current place
+  is saved first.
+
 ### 7.4 EPUB preferences
 
 Persist app-owned preferences and translate them to the plugin's
@@ -433,11 +459,20 @@ Initial preferences:
   Font family                                    Yes Only offer families
                                                      supported by the
                                                      plugin or bundled app
-                                                     fonts
+                                                     fonts. EPUB:
+                                                     original, serif or
+                                                     sans-serif (the
+                                                     device's generic
+                                                     families; no fonts
+                                                     bundled). Applies
+                                                     with publisher
+                                                     styles on
 
-  Reading theme                                  Yes Light, dark, sepia;
-                                                     map to supported
-                                                     styling API
+  Reading theme                                  Yes System, light, dark,
+                                                     sepia, twilight
+                                                     (EPUB only); map to
+                                                     supported styling
+                                                     API
 
   Pagination /                                   Yes Paginated default;
   scrolling                                          scroll mode optional
@@ -446,10 +481,19 @@ Initial preferences:
                                                      stable on both
                                                      platforms
 
-  Text alignment                            Optional Include if stable
+  Text alignment                                 Yes EPUB: original,
+                                                     left (start) or
+                                                     justified. A forced
+                                                     alignment turns off
+                                                     publisher styles
+                                                     (Readium applies
+                                                     it only then);
+                                                     "original" turns
+                                                     them back on
 
-  Margins                                      Later Avoid overloading
-                                                     initial settings
+  Margins                                        Yes EPUB side margins,
+                                                     0.5--2.0 × the
+                                                     engine default
 
   Columns                                      Later Not essential to MVP
 
@@ -485,6 +529,13 @@ display where available. - Restore the last reading position. - Basic
 page fit/layout preferences supported by the plugin. - PDF table of
 contents navigation where the publication exposes usable navigation
 data.
+
+PDF jumps use `goToProgression`, which the PDF navigator maps to
+`round(p × (pages − 1)) + 1` using `metadata.numberOfPages`. The adapter
+rounds to a page first and sends that page's exact progression, so the
+page the scrubber label names is the page that opens. The scrubber is
+hidden when the page count is unknown, and the progress label reads
+"Page N of M" when it is known.
 
 ### 8.2 PDF preferences
 
@@ -725,6 +776,32 @@ and search errors.
 
 MVP search may be limited to the open publication. Do not implement a
 cross-library full-text index in this reader module.
+
+#### Implementation (flutter_readium 0.9.0, Android)
+
+- EPUB only. The Android engine refuses PDF search (spike finding 14),
+  so `supportsSearch` is false for PDF and the search button is not
+  shown.
+- `searchInPublication` returns every match at once and cannot be
+  cancelled. The search therefore runs when the query is submitted, not
+  on each keystroke. A newer search, or a closed session, discards the
+  results of an older one.
+- Each result maps to an app-owned `ReaderSearchResult`: the locator,
+  the matched text with the text around it (whitespace collapsed), and
+  the chapter title. Results without matched text are dropped.
+  Non-linear spine items are not searched (spike finding 15).
+- Opening a result saves the current place, jumps with `goToLocator`
+  and underlines the match in its own decoration group
+  (`thaal_search`), separate from saved highlights. The underline is
+  orange (`ReadingPageColors.searchMatch`), which is not a highlight
+  colour. It stays until another result is opened, the search is
+  cleared, or the book is closed.
+- The last query and its results are kept with the reader session, so
+  reopening the sheet shows them.
+- Neither the query nor the results are logged. A failure logs only the
+  engine's error code.
+- Measured on the Android emulator: a word with 1,800 matches in the
+  test EPUB returned in under 2 seconds.
 
 ## 13. Reader UI specification
 

@@ -88,6 +88,51 @@ class FakePublicationReader implements PublicationReader {
     return true;
   }
 
+  bool progressionJump = true;
+  int? pages;
+  final jumps = <double>[];
+
+  @override
+  bool get supportsProgressionJump => _open && progressionJump;
+
+  @override
+  int? get pageCount =>
+      _open && _format == PublicationFormat.pdf ? pages : null;
+
+  @override
+  Future<bool> goToProgression(double progression) async {
+    calls.add('progression');
+    jumps.add(progression);
+    return progressionJump;
+  }
+
+  /// Results for the next searches; a [ReaderFailure] here is thrown.
+  Object searchOutcome = const <ReaderSearchResult>[];
+
+  /// When set, searches wait for it, to test overlapping searches.
+  Completer<void>? searchGate;
+  final searches = <String>[];
+  final searchMarks = <LocatorEnvelope?>[];
+
+  @override
+  bool get supportsSearch => _open && _format == PublicationFormat.epub;
+
+  @override
+  Future<List<ReaderSearchResult>> search(String query) async {
+    calls.add('search');
+    searches.add(query);
+    final outcome = searchOutcome;
+    await searchGate?.future;
+    if (outcome is ReaderFailure) throw outcome;
+    return outcome as List<ReaderSearchResult>;
+  }
+
+  @override
+  Future<bool> showSearchMatch(LocatorEnvelope? locator) async {
+    searchMarks.add(locator);
+    return true;
+  }
+
   @override
   Future<void> close() async {
     calls.add('close');

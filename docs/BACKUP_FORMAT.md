@@ -26,8 +26,21 @@ Where they differ from the illustrative examples below, the notes apply.
 -   `preferences.json` is present only when `preferencesIncluded` is true.
     Its `records` object uses the app's storage keys (`app.theme`,
     `reader.theme`, `reader.epub.fontScale`, `reader.epub.layout`,
-    `reader.pdf.layout`, `reader.pdf.fit`, `library.layout`,
-    `library.sort`); only these allowlisted keys are written.
+    `reader.pdf.layout`, `reader.pdf.fit`, `reader.epub.pageMargins`,
+    `reader.epub.textAlignment`, `reader.epub.fontFace`,
+    `library.layout`, `library.sort`);
+    only these allowlisted keys are written. Values
+    are validated on restore, and an invalid or unknown value is
+    skipped. `reader.theme` is one of `system`, `light`, `dark`,
+    `sepia` or `twilight`; the last two were added after the first
+    builds, so an older build skips them and keeps its own theme.
+    `reader.epub.pageMargins` (0.5--2.0) and `reader.epub.textAlignment`
+    (`original`, `start`, `justify`) and `reader.epub.fontFace`
+    (`original`, `serif`, `sansSerif`) were added later too; an older
+    build ignores them.
+    The reading brightness (`reader.brightness.*`) is deliberately not
+    written: it is a device-specific setting (§6), because the right
+    level depends on the screen.
 -   Locators are written as the stored locator envelope, unchanged.
 -   Resource limits used when reading an archive: archive 16 GiB,
     50,000 entries, manifest 32 MiB, each dataset 256 MiB, each

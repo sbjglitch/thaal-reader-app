@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show Brightness;
 
@@ -189,6 +190,134 @@ void main() {
       saved?.locator?.decode(PublicationFormat.epub)?.locator['href'],
       'c3',
     );
+  });
+
+  group('jumping by progression', () {
+    test('an open book says whether it can jump, and PDF its pages', () async {
+      reader.pages = 120;
+      await addBook(format: PublicationFormat.pdf);
+      final state = await start() as ReaderOpen;
+      expect(state.supportsProgressionJump, isTrue);
+      expect(state.pageCount, 120);
+    });
+
+    test('an EPUB the map cannot cover cannot jump', () async {
+      reader.progressionJump = false;
+      await addBook();
+      final state = await start() as ReaderOpen;
+      expect(state.supportsProgressionJump, isFalse);
+      expect(state.pageCount, isNull);
+    });
+
+    test('a jump saves the current place first', () async {
+      await addBook();
+      await start();
+      reader.emit(ReaderPositionChanged(position('c3', progression: 0.5)));
+      await settle();
+      expect(await controller().goToProgression(0.75), isTrue);
+      expect(reader.jumps, [0.75]);
+      final saved = await DriftReadingProgressRepository(db)
+          .getProgress('book-1');
+      expect(
+        saved?.locator?.decode(PublicationFormat.epub)?.locator['href'],
+        'c3',
+      );
+    });
+
+    test('a failed jump is reported', () async {
+      await addBook();
+      await start();
+      reader.progressionJump = false;
+      expect(await controller().goToProgression(0.5), isFalse);
+    });
+  });
+
+  group('search', () {
+    ReaderSearchResult found(String href) =>
+        ReaderSearchResult(locator: position(href).locator, match: 'word');
+
+    ReaderSearch current() => (subscription.read() as ReaderOpen).search;
+
+    test('results are kept with the session', () async {
+      await addBook();
+      final state = await start() as ReaderOpen;
+      expect(state.supportsSearch, isTrue);
+      reader.searchOutcome = [found('c2'), found('c5')];
+
+      await controller().search('  word ');
+      expect(reader.searches, ['word']);
+      final done = current() as ReaderSearchDone;
+      expect(done.query, 'word');
+      expect(done.results.map((r) => r.locator.locator['href']), ['c2', 'c5']);
+    });
+
+    test('shows the search as running', () async {
+      await addBook();
+      await start();
+      reader.searchGate = Completer<void>();
+      final searching = controller().search('word');
+      await settle();
+      expect((current() as ReaderSearchRunning).query, 'word');
+      reader.searchGate!.complete();
+      await searching;
+      expect(current(), isA<ReaderSearchDone>());
+    });
+
+    test('an engine failure is reported without the query', () async {
+      await addBook();
+      await start();
+      reader.searchOutcome = const ReaderFailure(
+        ReaderFailureKind.engine,
+        code: 'searchError',
+      );
+      await controller().search('word');
+      expect((current() as ReaderSearchFailed).query, 'word');
+    });
+
+    test('a blank query clears the search and the mark', () async {
+      await addBook();
+      await start();
+      await controller().search('word');
+      await controller().search('   ');
+      expect(current(), isA<ReaderSearchIdle>());
+      expect(reader.searches, ['word']);
+      expect(reader.searchMarks, [null]);
+    });
+
+    test('a slower earlier search does not replace a newer one', () async {
+      await addBook();
+      await start();
+      final slow = Completer<void>();
+      reader.searchGate = slow;
+      reader.searchOutcome = [found('old')];
+      final first = controller().search('old');
+      await settle();
+      reader.searchGate = null;
+      reader.searchOutcome = [found('new')];
+      await controller().search('new');
+      slow.complete();
+      await first;
+      final done = current() as ReaderSearchDone;
+      expect(done.query, 'new');
+      expect(done.results.single.locator.locator['href'], 'new');
+    });
+
+    test('PDF cannot be searched', () async {
+      await addBook(format: PublicationFormat.pdf);
+      final state = await start() as ReaderOpen;
+      expect(state.supportsSearch, isFalse);
+      await controller().search('word');
+      expect(reader.searches, isEmpty);
+    });
+
+    test('opening a result jumps there and marks it', () async {
+      await addBook();
+      await start();
+      final result = found('c7');
+      expect(await controller().goToSearchResult(result), isTrue);
+      expect(reader.visited.last, result.locator);
+      expect(reader.searchMarks, [result.locator]);
+    });
   });
 
   test('an unusable saved locator opens at the start and is kept', () async {

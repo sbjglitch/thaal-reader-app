@@ -16,9 +16,24 @@ void main() {
       ReaderPreferencesStore.epubLayoutKey,
       ReaderPreferencesStore.pdfLayoutKey,
       ReaderPreferencesStore.pdfFitKey,
+      ReaderPreferencesStore.pageMarginsKey,
+      ReaderPreferencesStore.textAlignmentKey,
+      ReaderPreferencesStore.fontFaceKey,
       LibraryViewController.layoutKey,
       LibraryViewController.sortKey,
     });
+  });
+
+  test('brightness is not backed up: it suits one device', () {
+    expect(
+      BackupPreferences.allowlist.keys,
+      isNot(
+        anyOf(
+          contains(ReaderPreferencesStore.brightnessFollowsSystemKey),
+          contains(ReaderPreferencesStore.brightnessLevelKey),
+        ),
+      ),
+    );
   });
 
   test('allowed values match the enums they store', () {
@@ -29,9 +44,32 @@ void main() {
       ReaderPreferencesStore.epubLayoutKey: names(PageLayout.values),
       ReaderPreferencesStore.pdfLayoutKey: names(PageLayout.values),
       ReaderPreferencesStore.pdfFitKey: names(PdfPageFit.values),
+      ReaderPreferencesStore.textAlignmentKey: names(TextAlignment.values),
+      ReaderPreferencesStore.fontFaceKey: names(FontFace.values),
       LibraryViewController.layoutKey: names(LibraryLayout.values),
       LibraryViewController.sortKey: names(LibrarySort.values),
     });
+  });
+
+  test('number ranges match the preference limits', () {
+    expect(BackupPreferences.allowedRanges, {
+      ReaderPreferencesStore.fontScaleKey: (
+        ReaderPreferences.minFontScale,
+        ReaderPreferences.maxFontScale,
+      ),
+      ReaderPreferencesStore.pageMarginsKey: (
+        ReaderPreferences.minPageMargins,
+        ReaderPreferences.maxPageMargins,
+      ),
+    });
+    expect(
+      BackupPreferences.validValue(ReaderPreferencesStore.pageMarginsKey, 2),
+      2.0,
+    );
+    expect(
+      BackupPreferences.validValue(ReaderPreferencesStore.pageMarginsKey, 0.1),
+      isNull,
+    );
   });
 
   test('applies only allowlisted, valid values', () async {

@@ -13,6 +13,9 @@ abstract final class BackupPreferences {
     'reader.epub.layout': String,
     'reader.pdf.layout': String,
     'reader.pdf.fit': String,
+    'reader.epub.pageMargins': double,
+    'reader.epub.textAlignment': String,
+    'reader.epub.fontFace': String,
     'library.layout': String,
     'library.sort': String,
   };
@@ -21,16 +24,22 @@ abstract final class BackupPreferences {
   /// in step with the enums by the same test.
   static const Map<String, Set<String>> allowedValues = {
     'app.theme': {'system', 'light', 'dark'},
-    'reader.theme': {'system', 'light', 'dark'},
+    'reader.theme': {'system', 'light', 'dark', 'sepia', 'twilight'},
     'reader.epub.layout': {'paginated', 'scroll'},
     'reader.pdf.layout': {'paginated', 'scroll'},
     'reader.pdf.fit': {'width', 'page'},
+    'reader.epub.textAlignment': {'original', 'start', 'justify'},
+    'reader.epub.fontFace': {'original', 'serif', 'sansSerif'},
     'library.layout': {'list', 'grid'},
     'library.sort': {'recentlyAdded', 'recentlyOpened', 'title', 'progress'},
   };
 
-  static const double _minFontScale = 0.8;
-  static const double _maxFontScale = 2.0;
+  /// Accepted range per key, for keys that hold a number. Kept in step with
+  /// `ReaderPreferences` by the same test.
+  static const Map<String, (double, double)> allowedRanges = {
+    'reader.epub.fontScale': (0.8, 2.0),
+    'reader.epub.pageMargins': (0.5, 2.0),
+  };
 
   /// The allowlisted settings that are set and have the expected type.
   static Map<String, Object> read(SharedPreferences prefs) {
@@ -43,8 +52,8 @@ abstract final class BackupPreferences {
   }
 
   /// [value] as it should be stored under [key], or null when the key is not
-  /// allowlisted or the value is invalid. Whole numbers are accepted for the
-  /// font scale because JSON does not distinguish 1 from 1.0.
+  /// allowlisted or the value is invalid. Whole numbers are accepted for
+  /// number settings because JSON does not distinguish 1 from 1.0.
   static Object? validValue(String key, Object? value) {
     final type = allowlist[key];
     if (type == String) {
@@ -54,11 +63,8 @@ abstract final class BackupPreferences {
     }
     if (type == double && value is num) {
       final number = value.toDouble();
-      return number.isFinite &&
-              number >= _minFontScale &&
-              number <= _maxFontScale
-          ? number
-          : null;
+      final (min, max) = allowedRanges[key]!;
+      return number.isFinite && number >= min && number <= max ? number : null;
     }
     return null;
   }

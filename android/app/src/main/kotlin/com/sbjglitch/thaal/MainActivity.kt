@@ -7,6 +7,7 @@ import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.system.ErrnoException
 import android.system.OsConstants
+import android.view.WindowManager
 import androidx.activity.result.contract.ActivityResultContracts
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -33,6 +34,25 @@ class MainActivity : FlutterFragmentActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BACKUP_CHANNEL)
             .setMethodCallHandler(::onBackupCall)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BRIGHTNESS_CHANNEL)
+            .setMethodCallHandler(::onBrightnessCall)
+    }
+
+    // Sets this window's brightness only; the system setting is untouched,
+    // so no permission is needed. A null level hands control back to the
+    // system (and to auto-brightness, if it is on).
+    private fun onBrightnessCall(call: MethodCall, result: MethodChannel.Result) {
+        if (call.method != "setBrightness") {
+            result.notImplemented()
+            return
+        }
+        val level = (call.arguments as? Number)?.toFloat()
+        val attributes = window.attributes
+        attributes.screenBrightness =
+            level?.coerceIn(MIN_BRIGHTNESS, 1f)
+                ?: WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        window.attributes = attributes
+        result.success(null)
     }
 
     private fun onBackupCall(call: MethodCall, result: MethodChannel.Result) {
@@ -138,6 +158,11 @@ class MainActivity : FlutterFragmentActivity() {
 
     private companion object {
         const val BACKUP_CHANNEL = "com.sbjglitch.thaal/backup"
+        const val BRIGHTNESS_CHANNEL = "com.sbjglitch.thaal/brightness"
+
+        // Some screens go fully dark at 0, which would leave the reader
+        // unreadable; the app's own minimum is higher still.
+        const val MIN_BRIGHTNESS = 0.01f
 
         // A specific type such as application/zip makes some providers
         // append their own extension; octet-stream keeps ".readerbackup".

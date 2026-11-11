@@ -164,6 +164,28 @@ final class ReaderHighlight {
   final HighlightColor color;
 }
 
+/// One match of a text search in the open publication. The text fields are
+/// publication content and must never be logged.
+final class ReaderSearchResult {
+  const ReaderSearchResult({
+    required this.locator,
+    required this.match,
+    this.before = '',
+    this.after = '',
+    this.chapterTitle,
+  });
+
+  /// Where the match is; pass it to [PublicationReader.goToLocator].
+  final LocatorEnvelope locator;
+
+  /// The matched text and a little of the text around it, with runs of
+  /// whitespace collapsed.
+  final String before;
+  final String match;
+  final String after;
+  final String? chapterTitle;
+}
+
 /// An error reported while reading. [fatal] errors leave the reader unusable.
 final class ReaderErrorEvent extends ReaderEvent {
   const ReaderErrorEvent(this.failure, {required this.fatal});
@@ -171,6 +193,19 @@ final class ReaderErrorEvent extends ReaderEvent {
   final ReaderFailure failure;
   final bool fatal;
 }
+
+/// The one-based PDF page for a whole-document [progression] of [pages]
+/// pages, rounded as the Android PDF navigator rounds it, so a page shown
+/// while dragging is the page a jump opens.
+int pdfPageForProgression(double progression, int pages) {
+  final clamped = progression.isNaN ? 0.0 : progression.clamp(0.0, 1.0);
+  return ((clamped * (pages - 1)).round() + 1).clamp(1, pages);
+}
+
+/// The whole-document progression of one-based [page] of [pages]; the
+/// inverse of [pdfPageForProgression].
+double pdfProgressionForPage(int page, int pages) =>
+    pages <= 1 ? 0 : ((page - 1) / (pages - 1)).clamp(0.0, 1.0);
 
 /// Reads display details out of stored locators without an open
 /// publication, so lists of saved locations can show a chapter or page.
@@ -225,6 +260,19 @@ abstract interface class PublicationReader {
   /// Returns false when the location cannot be found.
   Future<bool> goToLocator(LocatorEnvelope locator);
 
+  /// Whether [goToProgression] can jump anywhere in the open publication.
+  /// False when nothing is open or the engine cannot place a whole-book
+  /// position; callers hide the scrubber then.
+  bool get supportsProgressionJump;
+
+  /// Number of pages of the open PDF; null for EPUB or when unknown.
+  int? get pageCount;
+
+  /// Moves to [progression] (0.0–1.0) of the whole publication: a page for
+  /// PDF, a chapter and a point within it for EPUB. Returns false when it
+  /// cannot be resolved.
+  Future<bool> goToProgression(double progression);
+
   /// Whether the open publication supports text highlights. False for PDF
   /// and when nothing is open; callers hide highlight controls then.
   bool get supportsHighlights;
@@ -232,6 +280,22 @@ abstract interface class PublicationReader {
   /// Whether the "whole page" PDF fit is applied. Callers hide the page
   /// fit choice when it is not.
   bool get supportsPdfPageFit;
+
+  /// Whether text search works for the open publication. False for PDF,
+  /// which the Android engine cannot search, and when nothing is open;
+  /// callers hide search then.
+  bool get supportsSearch;
+
+  /// Every match of [query] in the open publication, in reading order.
+  /// Throws [ReaderFailure] when the engine search fails. The engine cannot
+  /// cancel a search, so a caller that no longer wants the results ignores
+  /// them.
+  Future<List<ReaderSearchResult>> search(String query);
+
+  /// Marks the search match at [locator] over the text, replacing any
+  /// earlier mark; null removes it. Returns false when it could not be
+  /// drawn.
+  Future<bool> showSearchMatch(LocatorEnvelope? locator);
 
   /// Replaces every highlight drawn over the open publication. Highlights
   /// whose locator the engine cannot read are skipped, not deleted.

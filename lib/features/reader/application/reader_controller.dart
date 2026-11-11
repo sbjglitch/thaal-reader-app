@@ -59,6 +59,35 @@ final class ReaderUnavailable extends ReaderState {
   final ReaderProblem problem;
 }
 
+/// Text search in the open book. Kept with the session, so closing and
+/// reopening the search sheet shows the last results.
+sealed class ReaderSearch {
+  const ReaderSearch();
+}
+
+final class ReaderSearchIdle extends ReaderSearch {
+  const ReaderSearchIdle();
+}
+
+final class ReaderSearchRunning extends ReaderSearch {
+  const ReaderSearchRunning(this.query);
+
+  final String query;
+}
+
+final class ReaderSearchDone extends ReaderSearch {
+  const ReaderSearchDone(this.query, this.results);
+
+  final String query;
+  final List<ReaderSearchResult> results;
+}
+
+final class ReaderSearchFailed extends ReaderSearch {
+  const ReaderSearchFailed(this.query);
+
+  final String query;
+}
+
 final class ReaderOpen extends ReaderState {
   const ReaderOpen({
     required this.book,
@@ -68,6 +97,10 @@ final class ReaderOpen extends ReaderState {
     this.position,
     this.restoreFailed = false,
     this.supportsHighlights = false,
+    this.supportsProgressionJump = false,
+    this.pageCount,
+    this.supportsSearch = false,
+    this.search = const ReaderSearchIdle(),
   });
 
   final Book book;
@@ -87,7 +120,21 @@ final class ReaderOpen extends ReaderState {
   /// Text highlights are offered for this publication (EPUB only).
   final bool supportsHighlights;
 
-  ReaderOpen copyWith({bool? ready, ReaderPosition? position}) => ReaderOpen(
+  /// The scrubber can jump anywhere in this publication.
+  final bool supportsProgressionJump;
+
+  /// Pages of the PDF; null for EPUB or when unknown.
+  final int? pageCount;
+
+  /// Text search is offered for this publication (EPUB only).
+  final bool supportsSearch;
+  final ReaderSearch search;
+
+  ReaderOpen copyWith({
+    bool? ready,
+    ReaderPosition? position,
+    ReaderSearch? search,
+  }) => ReaderOpen(
     book: book,
     toc: toc,
     initialLocator: initialLocator,
@@ -95,6 +142,10 @@ final class ReaderOpen extends ReaderState {
     position: position ?? this.position,
     restoreFailed: restoreFailed,
     supportsHighlights: supportsHighlights,
+    supportsProgressionJump: supportsProgressionJump,
+    pageCount: pageCount,
+    supportsSearch: supportsSearch,
+    search: search ?? this.search,
   );
 }
 
@@ -145,6 +196,10 @@ class ReaderController extends Notifier<ReaderState> {
   /// After a failed restore the engine reports the start of the book; that
   /// position must not overwrite the saved one until the reader moves.
   bool _skipNextPosition = false;
+
+  /// Increases with every search, so a slow one cannot overwrite a newer
+  /// one's results.
+  int _searchGeneration = 0;
 
   /// Notices for the screen; see [ReaderNotice].
   Stream<ReaderNotice> get notices => _notices.stream;
@@ -247,6 +302,9 @@ class ReaderController extends Notifier<ReaderState> {
       initialLocator: initial,
       restoreFailed: restoreFailed,
       supportsHighlights: supportsHighlights,
+      supportsProgressionJump: _reader.supportsProgressionJump,
+      pageCount: _reader.pageCount,
+      supportsSearch: _reader.supportsSearch,
     );
     if (supportsHighlights) {
       _highlightSubscription = ref
@@ -445,6 +503,53 @@ class ReaderController extends Notifier<ReaderState> {
   Future<void> goForward() => _navigate(_reader.goForward);
 
   Future<void> goBackward() => _navigate(_reader.goBackward);
+
+  /// Jumps to [progression] of the whole publication from the scrubber.
+  /// Returns false when it could not be resolved.
+  Future<bool> goToProgression(double progression) async {
+    if (state is! ReaderOpen) return false;
+    _skipNextPosition = false;
+    await _saver?.flush();
+    return _reader.goToProgression(progression);
+  }
+
+  /// Searches the open book for [query] and keeps the outcome in
+  /// [ReaderOpen.search]. A blank query clears the search. Neither the
+  /// query nor the results are logged.
+  Future<void> search(String query) async {
+    final current = state;
+    if (current is! ReaderOpen || !current.supportsSearch) return;
+    final generation = ++_searchGeneration;
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      state = current.copyWith(search: const ReaderSearchIdle());
+      await _reader.showSearchMatch(null);
+      return;
+    }
+    state = current.copyWith(search: ReaderSearchRunning(trimmed));
+    ReaderSearch outcome;
+    try {
+      outcome = ReaderSearchDone(trimmed, await _reader.search(trimmed));
+    } on ReaderFailure catch (failure) {
+      _logger.warning('reader.search_failed', error: failure);
+      outcome = ReaderSearchFailed(trimmed);
+    }
+    final latest = state;
+    if (_disposed || generation != _searchGeneration || latest is! ReaderOpen) {
+      return;
+    }
+    state = latest.copyWith(search: outcome);
+  }
+
+  /// Moves to a search [result] and marks it. Returns false when it cannot
+  /// be found.
+  Future<bool> goToSearchResult(ReaderSearchResult result) async {
+    if (!await goToLocator(result.locator)) return false;
+    if (!await _reader.showSearchMatch(result.locator)) {
+      _logger.warning('reader.search_mark_failed');
+    }
+    return true;
+  }
 
   /// Returns false when the entry could not be resolved.
   Future<bool> goToTocEntry(TocEntry entry) async {

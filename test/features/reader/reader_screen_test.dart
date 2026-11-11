@@ -15,6 +15,8 @@ import 'package:thaal/features/bookmarks/application/bookmarks.dart';
 import 'package:thaal/features/highlights/application/highlights.dart';
 import 'package:thaal/features/reader/application/reader_controller.dart';
 import 'package:thaal/features/reader/presentation/reader_screen.dart';
+import 'package:thaal/features/reader/presentation/reader_scrubber.dart';
+import 'package:thaal/features/reader/presentation/reader_search_sheet.dart';
 import 'package:thaal/features/reader/presentation/swipe_page_turner.dart';
 import 'package:thaal/services/reader/publication_reader.dart';
 
@@ -24,6 +26,7 @@ import '../bookmarks/fake_bookmarks.dart';
 import '../highlights/fake_highlights.dart';
 import '../highlights/highlight_widgets_test.dart' show sampleHighlight;
 import 'fake_publication_reader.dart';
+import 'fake_screen_brightness.dart';
 import 'progress_saver_test.dart' show position;
 
 /// Controller double that exposes a fixed state.
@@ -56,12 +59,31 @@ class _StaticController extends ReaderController {
     calls.add('toc:${entry.title}');
     return false;
   }
+
+  @override
+  Future<void> search(String query) async => calls.add('search:$query');
+
+  /// Results in chapter "missing" cannot be opened.
+  @override
+  Future<bool> goToSearchResult(ReaderSearchResult result) async {
+    final href = result.locator.locator['href'];
+    calls.add('result:$href');
+    return href != 'missing';
+  }
+
+  /// Jumps past the middle of the book fail, to exercise the error path.
+  @override
+  Future<bool> goToProgression(double progression) async {
+    calls.add('progression:${progression.toStringAsFixed(2)}');
+    return progression <= 0.5;
+  }
 }
 
 void main() {
   late FakePublicationReader reader;
   late MemoryBookmarkRepository bookmarks;
   late MemoryHighlightRepository highlights;
+  late FakeScreenBrightness screen;
   _StaticController? controller;
 
   setUp(() {
@@ -77,6 +99,7 @@ void main() {
     SharedPreferences.setMockInitialValues(preferences);
     final prefs = await SharedPreferences.getInstance();
     reader = FakePublicationReader();
+    screen = FakeScreenBrightness();
     final book = state is ReaderOpen ? state.book : sampleBook();
     await tester.pumpWidget(
       ProviderScope(
@@ -98,6 +121,7 @@ void main() {
             (ref, bookId) =>
                 entriesOf(bookmarks.watchBookmarks(bookId), {book.id: book}),
           ),
+          screenBrightnessProvider.overrideWithValue(screen),
           readerControllerProvider.overrideWith2(
             (request) => controller = _StaticController(request, state),
           ),
@@ -172,6 +196,213 @@ void main() {
       ),
     );
     expect(find.text('Page 4'), findsOneWidget);
+  });
+
+  testWidgets('PDF with a known length shows the page count', (tester) async {
+    await pump(
+      tester,
+      ReaderOpen(
+        book: sampleBook(format: PublicationFormat.pdf),
+        toc: const [],
+        pageCount: 120,
+        position: position('p', progression: 0.1, page: 4),
+      ),
+    );
+    expect(find.text('Page 4 of 120'), findsOneWidget);
+  });
+
+  group('scrubber', () {
+    ReaderOpen open({bool ready = true, bool jump = true}) => ReaderOpen(
+      book: sampleBook(),
+      toc: const [],
+      ready: ready,
+      supportsProgressionJump: jump,
+      position: position('c1', progression: 0.25),
+    );
+
+    testWidgets('is shown when the book can jump', (tester) async {
+      await pump(tester, open());
+      expect(find.byType(ReaderScrubber), findsOneWidget);
+    });
+
+    testWidgets('is hidden when the book cannot jump', (tester) async {
+      await pump(tester, open(jump: false));
+      expect(find.byType(ReaderScrubber), findsNothing);
+    });
+
+    testWidgets('is hidden until the engine is ready', (tester) async {
+      await pump(tester, open(ready: false));
+      expect(find.byType(ReaderScrubber), findsNothing);
+    });
+
+    testWidgets('a release jumps, and a failed jump is explained', (
+      tester,
+    ) async {
+      await pump(tester, open());
+      final slider = find.byType(Slider);
+      final box = tester.getRect(slider);
+
+      await tester.tapAt(Offset(box.left + box.width * 0.4, box.center.dy));
+      await tester.pump();
+      expect(controller!.calls.last, startsWith('progression:0.'));
+      expect(find.text('That position could not be opened.'), findsNothing);
+
+      await tester.drag(slider, Offset(box.width, 0));
+      await tester.pump();
+      expect(controller!.calls.last, 'progression:1.00');
+      expect(find.text('That position could not be opened.'), findsOneWidget);
+    });
+  });
+
+  testWidgets('the reading brightness applies only while reading', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      ReaderOpen(book: sampleBook(), toc: const [], ready: true),
+      preferences: const {
+        'reader.brightness.followsSystem': false,
+        'reader.brightness.level': 0.25,
+      },
+    );
+    expect(screen.applied, [0.25]);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+    expect(screen.applied, [0.25, null]);
+  });
+
+  group('search', () {
+    ReaderSearchResult result(String href, {String? chapter}) =>
+        ReaderSearchResult(
+          locator: position(href).locator,
+          before: 'the start of ',
+          match: 'word',
+          after: ' and the rest',
+          chapterTitle: chapter,
+        );
+
+    ReaderOpen open({
+      PublicationFormat format = PublicationFormat.epub,
+      ReaderSearch search = const ReaderSearchIdle(),
+    }) => ReaderOpen(
+      book: sampleBook(format: format),
+      toc: const [],
+      ready: true,
+      supportsSearch: format == PublicationFormat.epub,
+      search: search,
+      position: position('c1', progression: 0.2),
+    );
+
+    Future<void> openSheet(WidgetTester tester) async {
+      await tester.tap(find.byTooltip('Search in book'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('EPUB offers search', (tester) async {
+      await pump(tester, open());
+      expect(find.byTooltip('Search in book'), findsOneWidget);
+    });
+
+    testWidgets('PDF does not offer search', (tester) async {
+      await pump(tester, open(format: PublicationFormat.pdf));
+      expect(find.byTooltip('Search in book'), findsNothing);
+    });
+
+    testWidgets('a submitted query is searched', (tester) async {
+      await pump(tester, open());
+      await openSheet(tester);
+      expect(find.text('Search in book'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'word');
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await tester.pump();
+      expect(controller!.calls, contains('search:word'));
+
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pump();
+      expect(controller!.calls.last, 'search:');
+    });
+
+    testWidgets('results show their context and open on a tap', (tester) async {
+      await pump(
+        tester,
+        open(
+          search: ReaderSearchDone('word', [
+            result('c2', chapter: 'Chapter 2'),
+            result('c5'),
+          ]),
+        ),
+      );
+      await openSheet(tester);
+      expect(find.text('2 matches'), findsOneWidget);
+      // The previous query is back in the field.
+      expect(find.widgetWithText(TextField, 'word'), findsOneWidget);
+      expect(find.text('Chapter 2'), findsOneWidget);
+      expect(
+        find.textContaining(
+          '…the start of word and the rest…',
+          findRichText: true,
+        ),
+        findsNWidgets(2),
+      );
+
+      await tester.tap(find.byType(SearchResultTile).first);
+      await tester.pumpAndSettle();
+      expect(controller!.calls.last, 'result:c2');
+      expect(find.byType(SearchResultTile), findsNothing);
+      expect(find.text('That match could not be opened.'), findsNothing);
+    });
+
+    testWidgets('a result that cannot be opened is explained', (tester) async {
+      await pump(
+        tester,
+        open(search: ReaderSearchDone('word', [result('missing')])),
+      );
+      await openSheet(tester);
+      expect(find.text('1 match'), findsOneWidget);
+      await tester.tap(find.byType(SearchResultTile));
+      await tester.pumpAndSettle();
+      expect(find.text('That match could not be opened.'), findsOneWidget);
+    });
+
+    testWidgets('no matches says so', (tester) async {
+      await pump(tester, open(search: const ReaderSearchDone('word', [])));
+      await openSheet(tester);
+      expect(find.text('No matches'), findsOneWidget);
+      expect(find.text('Nothing in this book matches “word”.'), findsOneWidget);
+    });
+
+    testWidgets('a running search shows progress', (tester) async {
+      await pump(tester, open(search: const ReaderSearchRunning('word')));
+      await tester.tap(find.byTooltip('Search in book'));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(find.byType(SearchResultTile), findsNothing);
+    });
+
+    testWidgets('a failed search can be retried', (tester) async {
+      await pump(tester, open(search: const ReaderSearchFailed('word')));
+      await openSheet(tester);
+      expect(find.text('Search did not work'), findsOneWidget);
+      await tester.tap(find.text('Try again'));
+      await tester.pump();
+      expect(controller!.calls.last, 'search:word');
+    });
+
+    test('long leading context is cut at a word', () {
+      expect(leadingContext('short'), 'short');
+      // The cut lands at the start of "three", so it is kept.
+      expect(
+        leadingContext('one two three four five six seven eight nine ten'),
+        'three four five six seven eight nine ten',
+      );
+      // The cut lands inside "three", so the partial word goes.
+      expect(
+        leadingContext('one two three four five six seven eight nine ten!'),
+        'four five six seven eight nine ten!',
+      );
+      expect(leadingContext('x' * 50), 'x' * 40);
+    });
   });
 
   group('bookmarks', () {
@@ -388,11 +619,60 @@ void main() {
           book: sampleBook(title: longTitle),
           toc: const [TocEntry(index: 0, title: longTitle, depth: 0)],
           ready: true,
+          supportsProgressionJump: true,
+          supportsSearch: true,
           position: position('c1', progression: 0.5),
         ),
       );
+      expect(find.byType(ReaderScrubber), findsOneWidget);
+      expect(find.byTooltip('Search in book'), findsOneWidget);
       await tester.tap(find.byTooltip('Contents'));
       await tester.pumpAndSettle();
+    });
+
+    testWidgets('search results fit', (tester) async {
+      useSmallPhoneWithLargeText(tester);
+      await pump(
+        tester,
+        ReaderOpen(
+          book: sampleBook(title: longTitle),
+          toc: const [],
+          ready: true,
+          supportsSearch: true,
+          position: position('c1', progression: 0.5),
+          search: ReaderSearchDone('word', [
+            for (var i = 0; i < 20; i++)
+              ReaderSearchResult(
+                locator: position('c$i').locator,
+                before: 'a long stretch of text before the match ' * 3,
+                match: 'word',
+                after: ' and a long stretch of text after it' * 3,
+                chapterTitle: longTitle,
+              ),
+          ]),
+        ),
+      );
+      await tester.tap(find.byTooltip('Search in book'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SearchResultTile), findsWidgets);
+    });
+
+    testWidgets('search states fit', (tester) async {
+      useSmallPhoneWithLargeText(tester);
+      await pump(
+        tester,
+        ReaderOpen(
+          book: sampleBook(),
+          toc: const [],
+          ready: true,
+          supportsSearch: true,
+          search: const ReaderSearchFailed('word'),
+          position: position('c1', progression: 0.5),
+        ),
+      );
+      await tester.tap(find.byTooltip('Search in book'));
+      await tester.pumpAndSettle();
+      expect(find.text('Search did not work'), findsOneWidget);
     });
 
     testWidgets('problems fit', (tester) async {

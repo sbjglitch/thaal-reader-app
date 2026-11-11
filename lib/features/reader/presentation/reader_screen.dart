@@ -19,6 +19,8 @@ import '../../highlights/application/highlights.dart';
 import '../../highlights/presentation/highlight_widgets.dart';
 import '../application/reader_controller.dart';
 import '../application/reader_preferences_controller.dart';
+import 'reader_scrubber.dart';
+import 'reader_search_sheet.dart';
 import 'reader_settings_sheet.dart';
 import 'swipe_page_turner.dart';
 import 'toc_sheet.dart';
@@ -40,6 +42,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
   Widget? _view;
   ReaderController? _noticeSource;
   StreamSubscription<ReaderNotice>? _notices;
+
+  /// Held so the window brightness can be released in [dispose], when
+  /// `ref` can no longer be used.
+  late final ReaderBrightnessController _brightness;
+
+  @override
+  void initState() {
+    super.initState();
+    // The chosen reading brightness applies only while the reader is open.
+    _brightness = ref.read(readerBrightnessProvider.notifier);
+    unawaited(_brightness.activate());
+  }
 
   @override
   void didChangeDependencies() {
@@ -85,6 +99,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   void dispose() {
+    unawaited(_brightness.release());
     unawaited(_notices?.cancel());
     _controlsVisible.dispose();
     super.dispose();
@@ -183,6 +198,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                   request: widget.request,
                   format: state.book.format,
                 ),
+                onJump: (progression) => _jumpTo(progression, controller),
+                onSearch: state.supportsSearch
+                    ? () => _showSearch(controller)
+                    : null,
               ),
             ),
           ),
@@ -285,6 +304,29 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
             'The highlight and its note have been kept.',
           ),
         ),
+      );
+    }
+  }
+
+  Future<bool> _jumpTo(double progression, ReaderController controller) async {
+    final jumped = await controller.goToProgression(progression);
+    if (!jumped && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That position could not be opened.')),
+      );
+    }
+    return jumped;
+  }
+
+  Future<void> _showSearch(ReaderController controller) async {
+    final result = await showReaderSearchSheet(
+      context,
+      request: widget.request,
+    );
+    if (result == null || !mounted) return;
+    if (!await controller.goToSearchResult(result) && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That match could not be opened.')),
       );
     }
   }
@@ -449,55 +491,76 @@ class _BottomBar extends StatelessWidget {
     required this.onPrevious,
     required this.onNext,
     required this.onSettings,
+    required this.onJump,
+    this.onSearch,
   });
 
   final ReaderOpen state;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
   final VoidCallback onSettings;
+  final Future<bool> Function(double progression) onJump;
+
+  /// Null when the publication cannot be searched (PDF).
+  final VoidCallback? onSearch;
 
   @override
   Widget build(BuildContext context) {
     final label = readerProgressLabel(state);
     return SafeArea(
       top: false,
-      child: SizedBox(
-        height: 56,
-        child: Row(
-          children: [
-            IconButton(
-              tooltip: 'Previous page',
-              icon: const Icon(Icons.chevron_left),
-              onPressed: state.ready ? onPrevious : null,
-            ),
-            Expanded(
-              child: Semantics(
-                liveRegion: true,
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelLarge,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Shown only where the engine can place a whole-book position.
+          if (state.ready && state.supportsProgressionJump)
+            ReaderScrubber(state: state, onJump: onJump),
+          SizedBox(
+            height: 56,
+            child: Row(
+              children: [
+                IconButton(
+                  tooltip: 'Previous page',
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: state.ready ? onPrevious : null,
                 ),
-              ),
+                Expanded(
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Next page',
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: state.ready ? onNext : null,
+                ),
+                if (onSearch != null)
+                  IconButton(
+                    tooltip: 'Search in book',
+                    icon: const Icon(Icons.search),
+                    onPressed: state.ready ? onSearch : null,
+                  ),
+                IconButton(
+                  tooltip: 'Reading settings',
+                  icon: const Icon(Icons.text_fields),
+                  onPressed: state.ready ? onSettings : null,
+                ),
+              ],
             ),
-            IconButton(
-              tooltip: 'Next page',
-              icon: const Icon(Icons.chevron_right),
-              onPressed: state.ready ? onNext : null,
-            ),
-            IconButton(
-              tooltip: 'Reading settings',
-              icon: const Icon(Icons.text_fields),
-              onPressed: state.ready ? onSettings : null,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-/// "Page 3" for PDF, "34%" for EPUB, empty until the first position.
+/// "Page 3 of 120" for PDF ("Page 3" when the count is unknown), "34%" for
+/// EPUB, empty until the first position.
 /// EPUB page counts depend on font and screen, so only progression is shown
 /// (spec §9.5: approximate display value).
 String readerProgressLabel(ReaderOpen state) {
@@ -505,7 +568,10 @@ String readerProgressLabel(ReaderOpen state) {
   if (position == null) return '';
   if (state.book.format == PublicationFormat.pdf) {
     final page = position.pageNumber;
-    if (page != null) return 'Page $page';
+    if (page != null) {
+      final pages = state.pageCount;
+      return pages == null ? 'Page $page' : 'Page $page of $pages';
+    }
   }
   final progression = position.progression;
   if (progression == null) return '';

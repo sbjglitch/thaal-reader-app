@@ -182,6 +182,12 @@ Initial reader themes:
 - **Light:** warm or neutral paper background with dark text.
 - **Dark:** dark charcoal background with soft light text.
 - **System:** follows the application/system theme where supported.
+- **Sepia:** warm paper background (`#F4ECD8`) with brown text (`#5B4636`).
+- **Twilight:** dim blue-grey background (`#2A2D36`) with warm grey text (`#CFCAC0`), softer than dark for low light.
+
+Light and dark use the app's `background` and `textPrimary` tokens; sepia and twilight have fixed colours that do not change with the app theme. Every reading theme keeps text contrast of at least 7:1. Reading themes apply to EPUB only; the PDF engine draws pages as they are.
+
+In reader settings, themes are shown as chips with a small swatch of the page and text colours, and a text label so colour is never the only cue.
 
 Do not assume the app's dark theme must force every publication into dark reading mode. Provide a reader-specific theme preference if supported by the engine.
 
@@ -372,8 +378,16 @@ The screen definitions below describe required content and behaviour, not pixel-
 **Bottom controls:**
 
 - Current location or progress, where meaningful.
-- Progress navigation control if supported.
+- Progress navigation control if supported: a slider across the whole
+  publication that shows where it will open while dragging ("Page N of
+  M" for PDF, a percentage for EPUB) and jumps once on release. It is
+  hidden when the publication cannot be mapped.
 - Access to bookmarks and reader settings.
+- Search within the publication, where supported (EPUB): a sheet with a
+  search field. The search runs on submit and lists the matches with
+  the surrounding text (the match in bold) and the chapter, a match
+  count, and "No matches" or a retryable error. Opening a match
+  underlines it on the page.
 
 **Secondary actions:**
 
@@ -436,6 +450,14 @@ For EPUB, show only options supported by the engine, such as:
 - Line spacing.
 - Margins.
 - Text alignment, if supported.
+
+For both formats, where the platform allows it (Android; iOS deferred):
+
+- Brightness: a slider for the screen brightness while reading and a
+  "Match system brightness" switch, on by default. The slider changes
+  the screen as it is dragged and turns the switch off. The level
+  applies only while a book is open; elsewhere the system decides. It
+  is remembered on this device and not backed up.
 
 For PDF, show only supported viewing options, such as:
 

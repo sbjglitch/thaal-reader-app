@@ -28,6 +28,7 @@ import '../services/backup/backup_saver.dart';
 import '../services/import/document_picker.dart';
 import '../services/import/import_service.dart';
 import '../services/library/book_removal_service.dart';
+import '../services/platform/screen_brightness.dart';
 import '../services/reader/publication_reader.dart';
 import '../services/reader/readium_publication_inspector.dart';
 import '../services/reader/readium_publication_reader.dart';
@@ -129,6 +130,10 @@ final bookRemovalServiceProvider = Provider<BookRemovalService>(
 
 final librarySnapshotRepositoryProvider = Provider<LibrarySnapshotRepository>(
   (ref) => DriftLibrarySnapshotRepository(ref.watch(appDatabaseProvider)),
+);
+
+final screenBrightnessProvider = Provider<ScreenBrightness>(
+  (ref) => const PlatformScreenBrightness(),
 );
 
 final backupSaverProvider = Provider<BackupSaver>(

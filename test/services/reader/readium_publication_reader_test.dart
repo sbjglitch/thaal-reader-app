@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' show Color, Colors;
+import 'package:flutter/material.dart' show Color, Colors, TextAlign;
 import 'package:flutter_readium/flutter_readium.dart' hide PublicationFormat;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:thaal/app/theme/highlight_colors.dart';
@@ -146,6 +146,38 @@ void main() {
       expect(epub.textColor, Colors.white);
     });
 
+    test('EPUB margins pass through; alignment toggles publisher styles', () {
+      EPUBPreferences epub(TextAlignment alignment) =>
+          ReadiumPublicationReader.epubPreferencesFrom(
+            appearance(
+              ReaderPreferences(pageMargins: 1.5, textAlignment: alignment),
+            ),
+          );
+
+      expect(epub(TextAlignment.original).pageMargins, 1.5);
+      // Readium applies textAlign only with publisher styles off, so
+      // "original" turns them back on.
+      expect(epub(TextAlignment.original).publisherStyles, isTrue);
+      expect(epub(TextAlignment.original).textAlign, isNull);
+      expect(epub(TextAlignment.start).publisherStyles, isFalse);
+      expect(epub(TextAlignment.start).textAlign, TextAlign.start);
+      expect(epub(TextAlignment.justify).publisherStyles, isFalse);
+      expect(epub(TextAlignment.justify).textAlign, TextAlign.justify);
+    });
+
+    test('EPUB fonts map to generic families; original sends none', () {
+      String? family(FontFace face) =>
+          ReadiumPublicationReader.epubPreferencesFrom(
+            appearance(ReaderPreferences(fontFace: face)),
+          ).fontFamily;
+
+      // Each call replaces the engine's preferences, so null restores the
+      // publication's own fonts.
+      expect(family(FontFace.original), isNull);
+      expect(family(FontFace.serif), 'serif');
+      expect(family(FontFace.sansSerif), 'sans-serif');
+    });
+
     test('PDF always sends the full set of layout and fit', () {
       final pdf = ReadiumPublicationReader.pdfPreferencesFrom(
         appearance(
@@ -228,6 +260,64 @@ void main() {
         locator: {'nothing': true},
       );
       expect(interpreter.isSameLocation(broken, broken), isFalse);
+    });
+  });
+
+  group('search results', () {
+    TextSearchResult result({
+      String? before,
+      String? highlight,
+      String? after,
+      String? chapterTitle,
+      String? title,
+    }) => TextSearchResult(
+      chapterTitle: chapterTitle,
+      locator: Locator(
+        href: 'c2.xhtml',
+        type: 'application/xhtml+xml',
+        title: title,
+        text: LocatorText(before: before, highlight: highlight, after: after),
+      ),
+    );
+
+    test('carry the locator, the match and tidied context', () {
+      final mapped = ReadiumPublicationReader.searchResultFrom(
+        result(
+          before: '  end of\n\n  one ',
+          highlight: 'the  word',
+          after: ' and\tmore  ',
+          chapterTitle: ' Chapter 2 ',
+        ),
+      )!;
+      expect(mapped.locator.format, PublicationFormat.epub);
+      expect(mapped.locator.locator['href'], 'c2.xhtml');
+      expect(mapped.before, 'end of one ');
+      expect(mapped.match, 'the word');
+      expect(mapped.after, ' and more');
+      expect(mapped.chapterTitle, 'Chapter 2');
+    });
+
+    test("fall back to the locator's title", () {
+      final mapped = ReadiumPublicationReader.searchResultFrom(
+        result(highlight: 'word', title: 'Part one'),
+      )!;
+      expect(mapped.chapterTitle, 'Part one');
+      expect(mapped.before, '');
+      expect(mapped.after, '');
+      expect(
+        ReadiumPublicationReader.searchResultFrom(
+          result(highlight: 'word', chapterTitle: '  '),
+        )!.chapterTitle,
+        isNull,
+      );
+    });
+
+    test('without matched text are dropped', () {
+      expect(ReadiumPublicationReader.searchResultFrom(result()), isNull);
+      expect(
+        ReadiumPublicationReader.searchResultFrom(result(highlight: ' \n ')),
+        isNull,
+      );
     });
   });
 
